@@ -6,18 +6,25 @@ import time
 import base64
 import json
 import requests
-import urllib3
 import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ── CONFIGURACIÓN ─────────────────────────────────────────────────────────────
-BASE_URL  = "https://encuestas.cnccol.com/index.php/admin/remotecontrol"
-USUARIO   = "api_visor"
-PASSWORD  = "Av3594fmcxais3CxEC4DAjr"
+# ── CONFIGURACIÓN SEGURA ───────────────────────────────────────────────────────
+# Las credenciales NO se guardan en este archivo.
+# En Streamlit Community Cloud: App → Settings → Secrets.
+# En servidor propio: .streamlit/secrets.toml (fuera de Git).
+try:
+    BASE_URL = st.secrets["limesurvey"]["base_url"]
+    USUARIO = st.secrets["limesurvey"]["usuario"]
+    PASSWORD = st.secrets["limesurvey"]["password"]
+    VIEWER_PASSWORD = st.secrets["app"]["viewer_password"]
+except Exception:
+    st.error("Faltan los Secrets de Streamlit. Configura [limesurvey] y [app].")
+    st.stop()
+
 SURVEY_ID = "916501"
 EXCLUIDOS = {9, 13, 20}
 INTERVALO = 60
@@ -83,8 +90,8 @@ if not st.session_state.autenticado:
         """, unsafe_allow_html=True)
         clave = st.text_input("Clave", type="password", placeholder="Clave de acceso",
                               label_visibility="collapsed")
-        if st.button("Ingresar", use_container_width=True) or clave == "CNC2026*":
-            if clave == "CNC2026*":
+        if st.button("Ingresar", use_container_width=True) or clave == VIEWER_PASSWORD:
+            if clave == VIEWER_PASSWORD:
                 st.session_state.autenticado = True
                 st.rerun()
             else:
@@ -121,11 +128,12 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ── API LIMESURVEY ─────────────────────────────────────────────────────────────
 def rpc(method, params):
     r = requests.post(BASE_URL,
                       json={"method": method, "params": params, "id": 1},
                       headers={"Content-Type": "application/json"},
-                      timeout=30, verify=False)
+                      timeout=30)
     r.raise_for_status()
     result = r.json().get("result")
     if isinstance(result, dict) and "status" in result:
@@ -134,12 +142,16 @@ def rpc(method, params):
 
 @st.cache_data(ttl=INTERVALO, show_spinner=False)
 def cargar():
-    key = rpc("get_session_key", [USUARIO, PASSWORD])
-    raw = rpc("export_responses", [key, SURVEY_ID, "json", None, "complete", "long", "full"])
+    key = None
     try:
-        rpc("release_session_key", [key])
-    except:
-        pass
+        key = rpc("get_session_key", [USUARIO, PASSWORD])
+        raw = rpc("export_responses", [key, SURVEY_ID, "json", None, "complete", "long", "full"])
+    finally:
+        if key:
+            try:
+                rpc("release_session_key", [key])
+            except Exception:
+                pass
     try:
         data = json.loads(base64.b64decode(raw).decode("utf-8"))
     except:
@@ -148,10 +160,12 @@ def cargar():
     if not isinstance(filas, list):
         filas = list(filas.values())
     df = pd.DataFrame(filas)
+    # Excluir IDs
     c_id = get_col(df, "id")
     if c_id:
         df[c_id] = pd.to_numeric(df[c_id], errors="coerce")
         df = df[~df[c_id].isin(EXCLUIDOS)]
+    # Solo completas
     c_f = get_col(df, "fecha")
     if c_f:
         df = df[df[c_f].notna() & (df[c_f].astype(str).str.strip() != "N")]
