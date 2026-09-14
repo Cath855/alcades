@@ -3,7 +3,6 @@ CC916501 — Encuesta de Reputación de Alcaldes · Colombia 2026
 Visor en línea · CCD Área de Innovación
 """
 import time
-from datetime import datetime
 import pandas as pd
 import streamlit as st
 
@@ -12,19 +11,19 @@ SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRLCqyVMWlyCtUQI-oR
 EXCLUIDOS = {9, 13, 20}
 INTERVALO = 60
 
-# Nombres posibles de cada columna en el CSV exportado de LimeSurvey
+# Nombres exactos de columnas según exportación LimeSurvey CC916501
 COLS = {
-    "id":       ["id", "ID de respuesta", "Response ID"],
-    "fecha":    ["submitdate", "Fecha de envío", "Date submitted"],
-    "municipio":["G01Q01", "municipio", "MUNICIPIO", "Municipio"],
-    "alcalde":  ["G01Q02", "alcalde",   "ALCALDE",   "Alcalde"],
-    "pp1":      ["PP1", "pp1", "G02Q01"],
-    "pp2":      ["PP2", "pp2", "G02Q02"],
-    "pp3":      ["PP3", "pp3", "G03Q01", "Rango de edad"],
-    "pp4":      ["PP4", "pp4", "G03Q02", "Género", "Genero"],
-    "pp5":      ["PP5", "pp5", "G03Q03", "Estrato"],
-    "pp6":      ["PP6", "pp6", "G03Q04", "Nivel educativo"],
-    "pp7":      ["PP7", "pp7", "G03Q05", "Situación laboral"],
+    "id":       ["ID de respuesta"],
+    "fecha":    ["Fecha de envío"],
+    "municipio":["Municipio", "PF2. ¿En qué ciudad reside actualmente?"],
+    "alcalde":  ["Alcalde", "{if(CIUDAD.NAOK == 1, \"Juan Alfredo Qüenza Ramos\", if(CIUDAD.NAOK == 2, \"James Padilla García\", if(CIUDAD.NAOK == 3, \"Alejandro Char Chaljub\", if(CIUDAD.NAOK == 4, \"Carlos Fernando Galán Pachón\", if(CIUDAD.NAOK == 5, \"Cristian Fernando Portilla Pérez\", if(CIUDAD.NAOK == 6, \"Alejandro Éder Garcés\", if(CIUDAD.NAOK == 7, \"Dumek Turbay Paz\", if(CIUDAD.NAOK == 8, \"Jorge Enrique Acevedo Peñaloza\", if(CIUDAD.NAOK == 9, \"Marlon Monsalve Ascanio\", if(CIUDAD.NAOK == 10, \"Johana Ximena Aranda Rivera\", if(CIUDAD.NAOK == 11, \"Arturo Alexander Sánchez Escobar\", if(CIUDAD.NAOK == 12, \"Elquin Jadrian Uní Heredia\", if(CIUDAD.NAOK == 13, \"Jorge Eduardo Rojas Giraldo\", if(CIUDAD.NAOK == 14, \"Federico Andrés Gutiérrez Zuluaga\", if(CIUDAD.NAOK == 15, \"Marco Alirio Porras Pérez\", if(CIUDAD.NAOK == 16, \"Carlos Hugo Piedrahita Pérez\", if(CIUDAD.NAOK == 17, \"Hugo Fernando Kerguelén García\", if(CIUDAD.NAOK == 18, \"Germán Casagua Bonilla\", if(CIUDAD.NAOK == 19, \"Nicolás Martín Toro Muñoz\", if(CIUDAD.NAOK == 20, \"Mauricio Salazar Peláez\", if(CIUDAD.NAOK == 21, \"Juan Carlos Muñoz Bravo\", if(CIUDAD.NAOK == 22, \"Jaime Ariel Rodríguez Guzmán\", if(CIUDAD.NAOK == 23, \"Rafael Andrés Bolaños Pino\", if(CIUDAD.NAOK == 24, \"Genaro David Redondo Choles\", if(CIUDAD.NAOK == 25, \"Girley Natacha Ordóñez Bowie\", if(CIUDAD.NAOK == 26, \"Willy Alejandro Rodríguez Rojas\", if(CIUDAD.NAOK == 27, \"Carlos Pinedo Cuello\", if(CIUDAD.NAOK == 28, \"Yahir Fernando Acuña Cardales\", if(CIUDAD.NAOK == 29, \"Rafael Guillermo Acevedo Pedroza\", if(CIUDAD.NAOK == 30, \"Ernesto Miguel Orozco Durán\", if(CIUDAD.NAOK == 31, \"Alexander Baquero Sanabria\", if(CIUDAD.NAOK == 32, \"Marco Tulio Ruiz Riaño\", \"\" ))))))))))))))))))))))))))))))))}", "alcalde"],
+    "pp1":      ["PP1. En general, ¿tiene usted una opinión positiva o negativa de la gestión del alcalde {PF2ALCAL.shown}?"],
+    "pp2":      ["PP2. Pensando en las próximas elecciones, ¿usted preferiría que el próximo alcalde continúe con las obras y prioridades de la actual administración, o que establezca nuevas prioridades y realice cambios en la gestión?"],
+    "pp3":      ["PP3. ¿Cuál es su rango de edad?"],
+    "pp4":      ["PP4. ¿Con cuál género se identifica?"],
+    "pp5":      ["PP5. ¿En qué estrato socioeconómico está clasificada su vivienda?"],
+    "pp6":      ["PP6. ¿Cuál es su nivel educativo más alto completado?"],
+    "pp7":      ["PP7. ¿Cuál es su situación laboral actual?"],
 }
 
 def col(df, key):
@@ -85,14 +84,12 @@ if error:
     st.stop()
 
 # ── KPIs ──────────────────────────────────────────────────────────────────────
-ahora = datetime.now()
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Respuestas completas", len(df), help="Excluidos #9, #13, #20")
 c_muni = col(df, "municipio")
 c_alc  = col(df, "alcalde")
+k1, k2, k3 = st.columns(3)
+k1.metric("Respuestas completas", len(df), help="Excluidos #9, #13, #20")
 k2.metric("Municipios", df[c_muni].nunique() if c_muni else "—")
 k3.metric("Alcaldes evaluados", df[c_alc].nunique() if c_alc else "—")
-k4.metric("Actualización", ahora.strftime("%H:%M"), help=ahora.strftime("%d %b %Y"))
 
 st.divider()
 
