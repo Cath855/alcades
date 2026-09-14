@@ -50,47 +50,41 @@ if "autenticado" not in st.session_state:
 if not st.session_state.autenticado:
     st.markdown("""
     <style>
-    .login-wrap{display:flex;justify-content:center;align-items:center;min-height:80vh}
-    .login-box{background:#fff;border-radius:14px;border:1px solid #e2e8f0;
-               box-shadow:0 8px 32px rgba(0,36,112,.12);padding:44px 40px;width:100%;max-width:400px;text-align:center}
-    .login-franja{height:6px;border-radius:3px;background:linear-gradient(90deg,#FFD100 33%,#003DA5 33% 66%,#CE1126 66%);
-                  margin-bottom:28px}
-    .login-tag{font-size:10px;color:#8B96A9;letter-spacing:.14em;text-transform:uppercase;margin-bottom:6px}
-    .login-tit{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:700;color:#002470;margin-bottom:4px}
-    .login-sub{font-size:13px;color:#94a3b8;margin-bottom:28px}
-    .stTextInput input{text-align:center;font-size:15px;letter-spacing:.1em;border-radius:8px}
+    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Inter:wght@400;500;600&display=swap');
+    html,body,[class*="css"]{font-family:'Inter',sans-serif}
     div.stButton button{background:#002470!important;color:#fff!important;border:none!important;
-                        border-radius:8px!important;padding:10px!important;font-size:15px!important;
-                        font-weight:600!important;width:100%;margin-top:8px;
-                        transition:background .2s}
+                        border-radius:8px!important;font-size:15px!important;font-weight:600!important;
+                        padding:10px!important;width:100%}
     div.stButton button:hover{background:#003DA5!important}
     </style>
-    <div class="login-wrap">
-      <div class="login-box">
-        <div class="login-franja"></div>
-        <div class="login-tag">CC916501 · CCD · Colombia 2026</div>
-        <div class="login-tit">Reputación de Alcaldes</div>
-        <div class="login-sub">Ingresa la clave para acceder al visor</div>
-      </div>
-    </div>
     """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
+    _, col_c, _ = st.columns([1, 2, 1])
+    with col_c:
+        st.markdown("<br/><br/>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;
+                    box-shadow:0 8px 32px rgba(0,36,112,.12);padding:44px 40px;text-align:center">
+          <div style="height:6px;border-radius:3px;background:linear-gradient(90deg,#FFD100 33%,#003DA5 33% 66%,#CE1126 66%);margin-bottom:28px"></div>
+          <div style="font-size:10px;color:#8B96A9;letter-spacing:.14em;text-transform:uppercase;margin-bottom:6px">CC916501 · CCD · Colombia 2026</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:700;color:#002470;margin-bottom:4px">Reputación de Alcaldes</div>
+          <div style="font-size:13px;color:#94a3b8;margin-bottom:28px">Ingresa la clave para acceder al visor</div>
+        </div>
+        """, unsafe_allow_html=True)
         clave = st.text_input("Clave", type="password", placeholder="Clave de acceso",
                               label_visibility="collapsed")
-        ingresar = st.button("Ingresar", use_container_width=True)
-        if ingresar or clave == "CNC2026*":
+        if st.button("Ingresar", use_container_width=True) or clave == "CNC2026*":
             if clave == "CNC2026*":
                 st.session_state.autenticado = True
                 st.rerun()
-            elif ingresar:
-                st.error("Clave incorrecta — intenta de nuevo")
+            else:
+                st.error("Clave incorrecta")
     st.stop()
 
+# ── ESTILOS ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Inter:wght@400;500;600&display=swap');
 html,body,[class*="css"]{font-family:'Inter',sans-serif}
 .header{background:#002470;border-radius:10px;padding:18px 24px 14px;margin-bottom:24px;
         border-left:8px solid;border-image:linear-gradient(180deg,#FFD100 33%,#003DA5 33% 66%,#CE1126 66%) 1}
@@ -109,7 +103,6 @@ html,body,[class*="css"]{font-family:'Inter',sans-serif}
 </style>
 """, unsafe_allow_html=True)
 
-# ── HEADER GLOBAL ─────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="header">
   <div class="h-tag">CC916501 · CCD · Colombia 2026</div>
@@ -148,19 +141,30 @@ c_pp5  = get_col(df, "pp5")
 c_pp6  = get_col(df, "pp6")
 c_pp7  = get_col(df, "pp7")
 
-# ── SELECTOR MUNICIPIO ────────────────────────────────────────────────────────
-munis = ["Todos"] + sorted(df[c_muni].dropna().astype(str).unique().tolist()) if c_muni else ["Todos"]
+# ── KPIs GLOBALES ─────────────────────────────────────────────────────────────
+k1, k2, k3 = st.columns(3)
+k1.metric("Respuestas completas", len(df), help="Excluidos #9, #13, #20")
+k2.metric("Municipios", df[c_muni].nunique() if c_muni else "—")
+k3.metric("Alcaldes evaluados", df[c_alc].nunique() if c_alc else "—")
+
+st.divider()
+
+# Placeholder para ranking y tabla — se llena DESPUÉS de saber el filtro
+_ranking_placeholder = st.empty()
+
+# ── FILTROS ENCADENADOS ───────────────────────────────────────────────────────
+st.markdown('<div class="sec">Selecciona municipio y alcalde</div>', unsafe_allow_html=True)
 fa, fb, fc = st.columns([2, 2, 1])
 
+munis = ["Todos"] + sorted(df[c_muni].dropna().astype(str).unique().tolist()) if c_muni else ["Todos"]
 with fa:
     f_muni = st.selectbox("Municipio", munis)
 
 df_muni = df[df[c_muni].astype(str) == f_muni] if f_muni != "Todos" and c_muni else df
 alcs = ["Todos"] + sorted(df_muni[c_alc].dropna().astype(str).unique().tolist()) if c_alc else ["Todos"]
 idx_alc = 1 if len(alcs) == 2 else 0
-
 with fb:
-    f_alc = st.selectbox("Alcalde", alcs, index=idx_alc)
+    f_alc = st.selectbox("Alcalde evaluado", alcs, index=idx_alc)
 
 with fc:
     st.markdown("<br/>", unsafe_allow_html=True)
@@ -168,12 +172,20 @@ with fc:
         st.cache_data.clear()
         st.rerun()
 
-# Filtrar
+# ── APLICAR FILTROS ───────────────────────────────────────────────────────────
 dff = df.copy()
 if f_muni != "Todos" and c_muni:
     dff = dff[dff[c_muni].astype(str) == f_muni]
 if f_alc != "Todos" and c_alc:
     dff = dff[dff[c_alc].astype(str) == f_alc]
+
+hay_filtro = f_muni != "Todos" or f_alc != "Todos"
+
+# Forzar rerun cuando cambia el filtro para limpiar elementos anteriores
+filtro_key = f"{f_muni}_{f_alc}"
+if st.session_state.get("_filtro_prev") != filtro_key:
+    st.session_state["_filtro_prev"] = filtro_key
+    st.rerun()
 
 st.divider()
 
@@ -190,26 +202,20 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── KPIs DE LA FICHA ──────────────────────────────────────────────────────────
-def pct_respuesta(serie, valor):
-    if len(serie) == 0: return "—"
-    v = str(valor).lower()
-    matches = serie.astype(str).str.lower().str.contains(v, na=False)
-    return f"{matches.sum() / len(serie) * 100:.1f}%"
-
-k1, k2, k3, k4 = st.columns(4)
-
 serie_pp1 = dff[c_pp1].dropna() if c_pp1 else pd.Series()
+serie_pp2 = dff[c_pp2].dropna() if c_pp2 else pd.Series()
+
 positivas = serie_pp1.astype(str).str.lower().str.contains("positiv", na=False).sum()
 negativas = serie_pp1.astype(str).str.lower().str.contains("negativ", na=False).sum()
-pct_pos = f"{positivas/len(serie_pp1)*100:.1f}%" if len(serie_pp1) > 0 else "—"
-pct_neg = f"{negativas/len(serie_pp1)*100:.1f}%" if len(serie_pp1) > 0 else "—"
+continua  = serie_pp2.astype(str).str.lower().str.contains("continu", na=False).sum()
+cambia    = serie_pp2.astype(str).str.lower().str.contains("cambi|nueva", na=False).sum()
 
-serie_pp2 = dff[c_pp2].dropna() if c_pp2 else pd.Series()
-continua = serie_pp2.astype(str).str.lower().str.contains("continu", na=False).sum()
-cambia   = serie_pp2.astype(str).str.lower().str.contains("cambi|nueva", na=False).sum()
-pct_cont = f"{continua/len(serie_pp2)*100:.1f}%" if len(serie_pp2) > 0 else "—"
-pct_camb = f"{cambia/len(serie_pp2)*100:.1f}%" if len(serie_pp2) > 0 else "—"
+pct_pos  = f"{positivas/len(serie_pp1)*100:.1f}%" if len(serie_pp1) > 0 else "—"
+pct_neg  = f"{negativas/len(serie_pp1)*100:.1f}%" if len(serie_pp1) > 0 else "—"
+pct_cont = f"{continua/len(serie_pp2)*100:.1f}%"  if len(serie_pp2) > 0 else "—"
+pct_camb = f"{cambia/len(serie_pp2)*100:.1f}%"    if len(serie_pp2) > 0 else "—"
 
+k1, k2, k3, k4 = st.columns(4)
 with k1:
     st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#1a6e35">{pct_pos}</div><div class="kpi-l">Opinión positiva</div></div>', unsafe_allow_html=True)
 with k2:
@@ -221,10 +227,8 @@ with k4:
 
 st.divider()
 
-# ── FUNCIÓN BARRAS PERFIL (altura fija = todas iguales) ───────────────────────
-ALTURA_PERFIL = 320
-
-def pastel(df, col_name, titulo, colores=None):
+# ── FUNCIÓN BARRAS (para PP1, PP2 y perfil) ───────────────────────────────────
+def barras(df, col_name, titulo, colores=None, altura=320):
     if not col_name or col_name not in df.columns:
         return
     serie = df[col_name].dropna().astype(str)
@@ -258,104 +262,73 @@ def pastel(df, col_name, titulo, colores=None):
         xaxis=dict(range=[0, 118], showticklabels=False, showgrid=False, zeroline=False),
         yaxis=dict(automargin=True, tickfont=dict(size=11)),
         margin=dict(t=40, b=10, l=10, r=55),
-        height=ALTURA_PERFIL,
+        height=altura,
         plot_bgcolor="white",
         paper_bgcolor="white",
         bargap=0.3,
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# ── PP1 y PP2 EN BARRAS HORIZONTALES ─────────────────────────────────────────
+# ── PP1 y PP2 — SIEMPRE VISIBLES ─────────────────────────────────────────────
 st.markdown('<div class="sec">Resultados principales</div>', unsafe_allow_html=True)
-
-def barras(df, col_name, titulo, colores=None):
-    if not col_name or col_name not in df.columns:
-        return
-    serie = df[col_name].dropna().astype(str)
-    serie = serie[serie.str.strip().str.len() > 0]
-    if len(serie) == 0:
-        st.caption(f"{titulo}: sin datos")
-        return
-    total = len(serie)
-    vc = serie.value_counts().reset_index()
-    vc.columns = ["Respuesta", "Cantidad"]
-    vc["Porcentaje"] = (vc["Cantidad"] / total * 100).round(1)
-    vc = vc.sort_values("Porcentaje", ascending=True)
-
-    color_map = colores if colores else {}
-    colores_barras = [color_map.get(r, "#003DA5") for r in vc["Respuesta"]]
-
-    fig = go.Figure()
-    for i, row in vc.iterrows():
-        color = color_map.get(row["Respuesta"], "#003DA5") if color_map else "#003DA5"
-        fig.add_trace(go.Bar(
-            x=[row["Porcentaje"]],
-            y=[row["Respuesta"]],
-            orientation="h",
-            marker_color=color,
-            text=f"{row['Porcentaje']}%  ({row['Cantidad']})",
-            textposition="outside",
-            showlegend=False,
-            hovertemplate=f"<b>{row['Respuesta']}</b><br>{row['Cantidad']} respuestas ({row['Porcentaje']}%)<extra></extra>",
-        ))
-
-    fig.update_layout(
-        title=dict(text=titulo, font=dict(size=13, color="#002470")),
-        xaxis=dict(range=[0, 105], showticklabels=False, showgrid=False, zeroline=False),
-        yaxis=dict(automargin=True, tickfont=dict(size=12)),
-        margin=dict(t=45, b=10, l=10, r=100),
-        height=60 + len(vc) * 52,
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        bargap=0.3,
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
 r1, r2 = st.columns(2)
 with r1:
-    barras(dff, c_pp1, "PP1 — Opinión de la gestión del alcalde", COLORES_PP1)
+    barras(dff, c_pp1, "PP1 — Opinión de la gestión del alcalde", COLORES_PP1, altura=280)
 with r2:
-    barras(dff, c_pp2, "PP2 — Continuidad vs cambio")
+    barras(dff, c_pp2, "PP2 — Continuidad vs cambio", altura=280)
 
 st.divider()
 
-# ── RANKING TOP 3 / PEOR 3 (solo sin filtros) ────────────────────────────────
-if f_muni == "Todos" and f_alc == "Todos" and c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
-    st.markdown('<div class="sec">Ranking nacional — PP1 Opinión de gestión</div>', unsafe_allow_html=True)
-    if True:
-    # Calcular % positivo por alcalde sobre TODOS los datos (sin filtro)
+# ── PERFIL DEL ENCUESTADO — SIEMPRE VISIBLE ───────────────────────────────────
+st.markdown('<div class="sec">Perfil del encuestado</div>', unsafe_allow_html=True)
+p1, p2, p3 = st.columns(3)
+with p1:
+    barras(dff, c_pp4, "PP4 — Género")
+with p2:
+    barras(dff, c_pp3, "PP3 — Rango de edad")
+with p3:
+    barras(dff, c_pp5, "PP5 — Estrato")
+
+p4, p5, _ = st.columns(3)
+with p4:
+    barras(dff, c_pp6, "PP6 — Nivel educativo")
+with p5:
+    barras(dff, c_pp7, "PP7 — Situación laboral")
+
+# ── RANKING Y TABLA — SOLO SIN FILTROS ───────────────────────────────────────
+if not hay_filtro:
+    with _ranking_placeholder.container():
+      st.divider()
+      st.markdown('<div class="sec">Ranking nacional — PP1 Opinión de gestión</div>', unsafe_allow_html=True)
+
+    if c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
         tmp = df[[c_alc, c_pp1]].dropna()
         tmp = tmp[tmp[c_pp1].astype(str).str.strip().str.len() > 0]
-    
-        def pct_pos(serie):
+
+        def pct_positiva(serie):
             return serie.astype(str).str.lower().str.contains("positiv", na=False).sum() / len(serie) * 100
 
-        ranking = tmp.groupby(c_alc)[c_pp1].apply(pct_pos).reset_index()
+        ranking = tmp.groupby(c_alc)[c_pp1].apply(pct_positiva).reset_index()
         ranking.columns = ["Alcalde", "% Positiva"]
         ranking["% Positiva"] = ranking["% Positiva"].round(1)
         ranking["n"] = tmp.groupby(c_alc)[c_pp1].count().values
-        MIN_RESP = 20
-        ranking = ranking[ranking["n"] >= MIN_RESP]
+        ranking = ranking[ranking["n"] >= 20]
         ranking = ranking.sort_values("% Positiva", ascending=False).reset_index(drop=True)
-
-        # Traer ciudad de cada alcalde
         ciudad_por_alcalde = df.groupby(c_alc)[c_muni].agg(lambda x: x.value_counts().index[0] if len(x) > 0 else "—")
 
         top3  = ranking.head(3).copy()
         peor3 = ranking.tail(3).sort_values("% Positiva", ascending=True).copy()
 
-        st.caption(f"⚠️ El ranking se calcula con base en el porcentaje de opinión positiva (PP1). Solo se incluyen alcaldes con mínimo {MIN_RESP} respuestas registradas.")
+        st.caption("⚠️ El ranking se calcula con base en el % de opinión positiva (PP1). Solo se incluyen alcaldes con mínimo 20 respuestas.")
 
         ra, rb = st.columns(2)
-
         with ra:
             st.markdown("🏆 **Mejor calificados**")
             for i, row in top3.iterrows():
                 medal = ["🥇","🥈","🥉"][i]
                 ciudad = ciudad_por_alcalde.get(row["Alcalde"], "—")
                 st.markdown(f"""
-                <div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;
-                            padding:10px 14px;margin-bottom:8px">
+                <div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;padding:10px 14px;margin-bottom:8px">
                   <div style="display:flex;justify-content:space-between;align-items:center">
                     <span style="font-size:13px;font-weight:600">{medal} {row['Alcalde']}</span>
                     <span style="font-size:20px;font-weight:700;color:#15803d">{row['% Positiva']}%</span>
@@ -370,8 +343,7 @@ if f_muni == "Todos" and f_alc == "Todos" and c_pp1 and c_alc and c_pp1 in df.co
                 medal = ["🔴","🟠","🟡"][j]
                 ciudad = ciudad_por_alcalde.get(row["Alcalde"], "—")
                 st.markdown(f"""
-                <div style="background:#fff7f7;border-left:4px solid #ef4444;border-radius:6px;
-                            padding:10px 14px;margin-bottom:8px">
+                <div style="background:#fff7f7;border-left:4px solid #ef4444;border-radius:6px;padding:10px 14px;margin-bottom:8px">
                   <div style="display:flex;justify-content:space-between;align-items:center">
                     <span style="font-size:13px;font-weight:600">{medal} {row['Alcalde']}</span>
                     <span style="font-size:20px;font-weight:700;color:#CE1126">{row['% Positiva']}%</span>
@@ -380,46 +352,25 @@ if f_muni == "Todos" and f_alc == "Todos" and c_pp1 and c_alc and c_pp1 in df.co
                 </div>
                 """, unsafe_allow_html=True)
 
-
-st.divider()
-
-# ── PERFIL ────────────────────────────────────────────────────────────────────
-st.markdown('<div class="sec">Perfil del encuestado</div>', unsafe_allow_html=True)
-p1, p2, p3 = st.columns(3)
-with p1:
-    pastel(dff, c_pp4, "PP4 — Género")
-with p2:
-    pastel(dff, c_pp3, "PP3 — Rango de edad")
-with p3:
-    pastel(dff, c_pp5, "PP5 — Estrato")
-
-p4, p5, _ = st.columns(3)
-with p4:
-    pastel(dff, c_pp6, "PP6 — Nivel educativo")
-with p5:
-    pastel(dff, c_pp7, "PP7 — Situación laboral")
-
-# ── TABLA CIUDADES (solo cuando no hay filtro) ────────────────────────────────
-if f_muni == "Todos" and f_alc == "Todos" and c_muni and c_alc and c_muni in df.columns:
     st.divider()
     st.markdown('<div class="sec">Respuestas por ciudad</div>', unsafe_allow_html=True)
+    if c_muni and c_alc and c_muni in df.columns:
+        resumen = df.groupby(c_muni).size().reset_index(name="Respuestas")
+        resumen.columns = ["Ciudad", "Respuestas"]
+        alcalde_ciudad = df.groupby(c_muni)[c_alc].agg(
+            lambda x: x.value_counts().index[0] if len(x) > 0 else "—"
+        ).reset_index()
+        alcalde_ciudad.columns = ["Ciudad", "Alcalde"]
+        resumen = resumen.merge(alcalde_ciudad, on="Ciudad")
+        resumen = resumen.sort_values("Respuestas", ascending=False).reset_index(drop=True)
+        resumen.index = resumen.index + 1
+        resumen["% del total"] = (resumen["Respuestas"] / resumen["Respuestas"].sum() * 100).round(1).astype(str) + "%"
+        resumen = resumen[["Ciudad", "Alcalde", "Respuestas", "% del total"]]
+        st.dataframe(resumen, use_container_width=True, hide_index=False,
+                     height=min(420, 40 + len(resumen) * 36))
 
-    resumen = df.groupby(c_muni).size().reset_index(name="Respuestas")
-    resumen.columns = ["Ciudad", "Respuestas"]
-
-    alcalde_ciudad = df.groupby(c_muni)[c_alc].agg(
-        lambda x: x.value_counts().index[0] if len(x) > 0 else "—"
-    ).reset_index()
-    alcalde_ciudad.columns = ["Ciudad", "Alcalde"]
-
-    resumen = resumen.merge(alcalde_ciudad, on="Ciudad")
-    resumen = resumen.sort_values("Respuestas", ascending=False).reset_index(drop=True)
-    resumen.index = resumen.index + 1
-    resumen["% del total"] = (resumen["Respuestas"] / resumen["Respuestas"].sum() * 100).round(1).astype(str) + "%"
-    resumen = resumen[["Ciudad", "Alcalde", "Respuestas", "% del total"]]
-
-    st.dataframe(resumen, use_container_width=True, hide_index=False,
-                 height=min(420, 40 + len(resumen) * 36))
+else:
+    _ranking_placeholder.empty()
 
 # ── AUTO-REFRESCO ──────────────────────────────────────────────────────────────
 time.sleep(INTERVALO)
