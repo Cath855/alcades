@@ -10,7 +10,9 @@ from datetime import datetime
 
 import pandas as pd
 import requests
+import urllib3
 import streamlit as st
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ── CONFIGURACIÓN ────────────────────────────────────────────────────────────
 BASE_URL  = "https://encuestas.cnccol.com/index.php/admin/remotecontrol"
@@ -82,19 +84,61 @@ def rpc(method, params):
 
 @st.cache_data(ttl=INTERVALO, show_spinner=False)
 def cargar_datos():
-    key = rpc("get_session_key", [USUARIO, PASSWORD])
-    try:
-        raw = rpc("export_responses", [key, SURVEY_ID, "json", None, "complete", "long", "full"])
-    except Exception:
-        key = rpc("get_session_key", [USUARIO, PASSWORD])
-        raw = rpc("export_responses", [key, SURVEY_ID, "json", None, "complete", "long", "full"])
-    try:
-        data = json.loads(base64.b64decode(raw).decode("utf-8"))
-    except Exception:
-        data = raw if isinstance(raw, dict) else json.loads(raw)
-    filas = data.get("responses") or data.get("Responses") or data or []
+    # Intentar con export_responses (completas directamente)
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    
+    def rpc_raw(method, params):
+        payload = {"method": method, "params": params, "id": 1}
+        r = requests.post(BASE_URL, json=payload, headers=headers, timeout=30,
+                         verify=False)  # algunos servidores tienen SSL autofirmado
+        # Intentar parsear respuesta aunque venga con errores
+        text = r.text.strip()
+        if not text:
+            raise RuntimeError("Respuesta vacía del servidor")
+        try:
+            return r.json().get("result")
+        except Exception:
+            raise RuntimeError(f"Respuesta no JSON: {text[:200]}")
+    
+    key = rpc_raw("get_session_key", [USUARIO, PASSWORD])
+    if not key or (isinstance(key, dict) and "status" in key):
+        raise RuntimeError(f"Login fallido: {key}")
+    
+    # Intentar export con diferentes parámetros
+    raw = None
+    for completeness in ["complete", "all"]:
+        try:
+            raw = rpc_raw("export_responses", [key, SURVEY_ID, "json", None, completeness, "long", "full"])
+            if raw:
+                break
+        except Exception:
+            continue
+    
+    if not raw:
+        raise RuntimeError("No se pudieron obtener respuestas")
+
+    # Decodificar: puede venir en base64 o directo
+    data = None
+    if isinstance(raw, str):
+        try:
+            data = json.loads(base64.b64decode(raw).decode("utf-8"))
+        except Exception:
+            try:
+                data = json.loads(raw)
+            except Exception:
+                raise RuntimeError(f"No se pudo decodificar la respuesta: {raw[:200]}")
+    elif isinstance(raw, dict):
+        data = raw
+    elif isinstance(raw, list):
+        data = {"responses": raw}
+
+    filas = data.get("responses") or data.get("Responses") or []
     if not isinstance(filas, list):
-        filas = list(filas.values())
+        filas = list(filas.values()) if isinstance(filas, dict) else []
+
+    if not filas:
+        raise RuntimeError("La encuesta no tiene respuestas completas aún")
+
     df = pd.DataFrame(filas)
     if "id" in df.columns:
         df["id"] = pd.to_numeric(df["id"], errors="coerce")
@@ -102,7 +146,7 @@ def cargar_datos():
     if "submitdate" in df.columns:
         df = df[df["submitdate"].notna() & (df["submitdate"] != "N")]
     try:
-        rpc("release_session_key", [key])
+        rpc_raw("release_session_key", [key])
     except Exception:
         pass
     return df.reset_index(drop=True)
