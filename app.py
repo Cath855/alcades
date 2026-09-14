@@ -220,7 +220,9 @@ with k4:
 
 st.divider()
 
-# ── FUNCIÓN PASTEL ─────────────────────────────────────────────────────────────
+# ── FUNCIÓN BARRAS PERFIL (altura fija = todas iguales) ───────────────────────
+ALTURA_PERFIL = 320
+
 def pastel(df, col_name, titulo, colores=None):
     if not col_name or col_name not in df.columns:
         return
@@ -229,29 +231,36 @@ def pastel(df, col_name, titulo, colores=None):
     if len(serie) == 0:
         st.caption(f"{titulo}: sin datos")
         return
+    total = len(serie)
     vc = serie.value_counts().reset_index()
     vc.columns = ["Respuesta", "Cantidad"]
-    color_map = colores if colores else None
-    fig = px.pie(
-        vc, values="Cantidad", names="Respuesta",
-        title=titulo,
-        color="Respuesta",
-        color_discrete_map=color_map,
-        color_discrete_sequence=px.colors.qualitative.Safe,
-        hole=0.4,
-    )
-    fig.update_traces(
-        textposition="inside",
-        textinfo="percent",
-        hovertemplate="<b>%{label}</b><br>%{value} respuestas (%{percent})<extra></extra>"
-    )
+    vc["Porcentaje"] = (vc["Cantidad"] / total * 100).round(1)
+    vc = vc.sort_values("Porcentaje", ascending=True)
+    color_seq = px.colors.qualitative.Safe
+
+    fig = go.Figure()
+    for i, row in vc.iterrows():
+        color = colores.get(row["Respuesta"], color_seq[i % len(color_seq)]) if colores else color_seq[i % len(color_seq)]
+        fig.add_trace(go.Bar(
+            x=[row["Porcentaje"]],
+            y=[row["Respuesta"]],
+            orientation="h",
+            marker_color=color,
+            text=f"{row['Porcentaje']}%",
+            textposition="outside",
+            showlegend=False,
+            hovertemplate=f"<b>{row['Respuesta']}</b><br>{row['Cantidad']} resp. ({row['Porcentaje']}%)<extra></extra>",
+        ))
+
     fig.update_layout(
-        showlegend=True,
-        legend=dict(orientation="v", x=1.02, y=0.5, font=dict(size=12)),
-        margin=dict(t=45, b=10, l=10, r=140),
-        height=380,
-        title_font_size=14,
-        title_font_color="#002470",
+        title=dict(text=titulo, font=dict(size=13, color="#002470")),
+        xaxis=dict(range=[0, 118], showticklabels=False, showgrid=False, zeroline=False),
+        yaxis=dict(automargin=True, tickfont=dict(size=11)),
+        margin=dict(t=40, b=10, l=10, r=55),
+        height=ALTURA_PERFIL,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        bargap=0.3,
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -306,31 +315,6 @@ with r1:
     barras(dff, c_pp1, "PP1 — Opinión de la gestión del alcalde", COLORES_PP1)
 with r2:
     barras(dff, c_pp2, "PP2 — Continuidad vs cambio")
-
-st.divider()
-
-# ── TABLA DE RESPUESTAS POR CIUDAD ────────────────────────────────────────────
-st.markdown('<div class="sec">Respuestas por ciudad</div>', unsafe_allow_html=True)
-
-if c_muni and c_alc and c_muni in df.columns:
-    resumen = df.groupby(c_muni).agg(
-        Respuestas=(c_muni, "count"),
-    ).reset_index()
-    resumen.columns = ["Ciudad", "Respuestas"]
-    
-    # Agregar alcalde de cada ciudad
-    alcalde_ciudad = df.groupby(c_muni)[c_alc].agg(
-        lambda x: x.value_counts().index[0] if len(x) > 0 else "—"
-    ).reset_index()
-    alcalde_ciudad.columns = ["Ciudad", "Alcalde"]
-    
-    resumen = resumen.merge(alcalde_ciudad, on="Ciudad")
-    resumen = resumen.sort_values("Respuestas", ascending=False).reset_index(drop=True)
-    resumen.index = resumen.index + 1
-    resumen["% del total"] = (resumen["Respuestas"] / resumen["Respuestas"].sum() * 100).round(1).astype(str) + "%"
-    resumen = resumen[["Ciudad", "Alcalde", "Respuestas", "% del total"]]
-
-    st.dataframe(resumen, use_container_width=True, hide_index=False, height=min(400, 40 + len(resumen) * 36))
 
 st.divider()
 
@@ -412,6 +396,28 @@ with p4:
     pastel(dff, c_pp6, "PP6 — Nivel educativo")
 with p5:
     pastel(dff, c_pp7, "PP7 — Situación laboral")
+
+# ── TABLA CIUDADES (solo cuando no hay filtro) ────────────────────────────────
+if f_muni == "Todos" and f_alc == "Todos" and c_muni and c_alc and c_muni in df.columns:
+    st.divider()
+    st.markdown('<div class="sec">Respuestas por ciudad</div>', unsafe_allow_html=True)
+
+    resumen = df.groupby(c_muni).size().reset_index(name="Respuestas")
+    resumen.columns = ["Ciudad", "Respuestas"]
+
+    alcalde_ciudad = df.groupby(c_muni)[c_alc].agg(
+        lambda x: x.value_counts().index[0] if len(x) > 0 else "—"
+    ).reset_index()
+    alcalde_ciudad.columns = ["Ciudad", "Alcalde"]
+
+    resumen = resumen.merge(alcalde_ciudad, on="Ciudad")
+    resumen = resumen.sort_values("Respuestas", ascending=False).reset_index(drop=True)
+    resumen.index = resumen.index + 1
+    resumen["% del total"] = (resumen["Respuestas"] / resumen["Respuestas"].sum() * 100).round(1).astype(str) + "%"
+    resumen = resumen[["Ciudad", "Alcalde", "Respuestas", "% del total"]]
+
+    st.dataframe(resumen, use_container_width=True, hide_index=False,
+                 height=min(420, 40 + len(resumen) * 36))
 
 # ── AUTO-REFRESCO ──────────────────────────────────────────────────────────────
 time.sleep(INTERVALO)
