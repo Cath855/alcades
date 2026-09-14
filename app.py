@@ -43,6 +43,38 @@ def get_col(df, key):
 
 st.set_page_config(page_title="CC916501 · Reputación de Alcaldes", page_icon="🏛️", layout="wide")
 
+# ── CLAVE DE ACCESO ───────────────────────────────────────────────────────────
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
+
+if not st.session_state.autenticado:
+    st.markdown("""
+    <div style="max-width:380px;margin:80px auto;padding:36px 32px;background:#fff;
+         border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 4px 24px rgba(0,36,112,.08)">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-size:11px;color:#8B96A9;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px">
+          CC916501 · CCD · Colombia 2026
+        </div>
+        <div style="font-family:sans-serif;font-size:20px;font-weight:700;color:#002470">
+          Reputación de Alcaldes
+        </div>
+        <div style="font-size:13px;color:#8B96A9;margin-top:4px">Ingresa la clave para continuar</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col_c, col_r = st.columns([1,1])
+    with col_c:
+        clave = st.text_input("Clave de acceso", type="password", placeholder="••••••••",
+                              label_visibility="collapsed")
+        if st.button("Ingresar", use_container_width=True):
+            if clave == "CNC2026*":
+                st.session_state.autenticado = True
+                st.rerun()
+            else:
+                st.error("Clave incorrecta")
+    st.stop()
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap');
@@ -262,6 +294,55 @@ with r1:
     barras(dff, c_pp1, "PP1 — Opinión de la gestión del alcalde", COLORES_PP1)
 with r2:
     barras(dff, c_pp2, "PP2 — Continuidad vs cambio")
+
+st.divider()
+
+# ── RANKING TOP 3 / PEOR 3 ───────────────────────────────────────────────────
+st.markdown('<div class="sec">Ranking nacional — PP1 Opinión de gestión</div>', unsafe_allow_html=True)
+
+if c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
+    # Calcular % positivo por alcalde sobre TODOS los datos (sin filtro)
+    tmp = df[[c_alc, c_pp1]].dropna()
+    tmp = tmp[tmp[c_pp1].astype(str).str.strip().str.len() > 0]
+    
+    def pct_pos(serie):
+        return serie.astype(str).str.lower().str.contains("positiv", na=False).sum() / len(serie) * 100
+
+    ranking = tmp.groupby(c_alc)[c_pp1].apply(pct_pos).reset_index()
+    ranking.columns = ["Alcalde", "% Positiva"]
+    ranking["% Positiva"] = ranking["% Positiva"].round(1)
+    ranking["n"] = tmp.groupby(c_alc)[c_pp1].count().values
+    ranking = ranking[ranking["n"] >= 5]  # mínimo 5 respuestas
+    ranking = ranking.sort_values("% Positiva", ascending=False).reset_index(drop=True)
+
+    top3  = ranking.head(3)
+    peor3 = ranking.tail(3).sort_values("% Positiva", ascending=True)
+
+    ra, rb = st.columns(2)
+
+    with ra:
+        st.markdown("🏆 **Mejor calificados**")
+        for i, row in top3.iterrows():
+            medal = ["🥇","🥈","🥉"][i]
+            st.markdown(f"""
+            <div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;
+                        padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:13px">{medal} {row['Alcalde']}</span>
+              <span style="font-family:sans-serif;font-size:18px;font-weight:700;color:#15803d">{row['% Positiva']}%</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with rb:
+        st.markdown("⚠️ **Peor calificados**")
+        for j, (_, row) in enumerate(peor3.iterrows()):
+            medal = ["🔴","🟠","🟡"][j]
+            st.markdown(f"""
+            <div style="background:#fff7f7;border-left:4px solid #ef4444;border-radius:6px;
+                        padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:13px">{medal} {row['Alcalde']}</span>
+              <span style="font-family:sans-serif;font-size:18px;font-weight:700;color:#CE1126">{row['% Positiva']}%</span>
+            </div>
+            """, unsafe_allow_html=True)
 
 st.divider()
 
