@@ -247,10 +247,10 @@ def pastel(df, col_name, titulo, colores=None):
     )
     fig.update_layout(
         showlegend=True,
-        legend=dict(orientation="v", x=1.02, y=0.5, font=dict(size=11)),
-        margin=dict(t=45, b=10, l=10, r=120),
-        height=300,
-        title_font_size=13,
+        legend=dict(orientation="v", x=1.02, y=0.5, font=dict(size=12)),
+        margin=dict(t=45, b=10, l=10, r=140),
+        height=380,
+        title_font_size=14,
         title_font_color="#002470",
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -306,6 +306,31 @@ with r1:
     barras(dff, c_pp1, "PP1 — Opinión de la gestión del alcalde", COLORES_PP1)
 with r2:
     barras(dff, c_pp2, "PP2 — Continuidad vs cambio")
+
+st.divider()
+
+# ── TABLA DE RESPUESTAS POR CIUDAD ────────────────────────────────────────────
+st.markdown('<div class="sec">Respuestas por ciudad</div>', unsafe_allow_html=True)
+
+if c_muni and c_alc and c_muni in df.columns:
+    resumen = df.groupby(c_muni).agg(
+        Respuestas=(c_muni, "count"),
+    ).reset_index()
+    resumen.columns = ["Ciudad", "Respuestas"]
+    
+    # Agregar alcalde de cada ciudad
+    alcalde_ciudad = df.groupby(c_muni)[c_alc].agg(
+        lambda x: x.value_counts().index[0] if len(x) > 0 else "—"
+    ).reset_index()
+    alcalde_ciudad.columns = ["Ciudad", "Alcalde"]
+    
+    resumen = resumen.merge(alcalde_ciudad, on="Ciudad")
+    resumen = resumen.sort_values("Respuestas", ascending=False).reset_index(drop=True)
+    resumen.index = resumen.index + 1
+    resumen["% del total"] = (resumen["Respuestas"] / resumen["Respuestas"].sum() * 100).round(1).astype(str) + "%"
+    resumen = resumen[["Ciudad", "Alcalde", "Respuestas", "% del total"]]
+
+    st.dataframe(resumen, use_container_width=True, hide_index=False, height=min(400, 40 + len(resumen) * 36))
 
 st.divider()
 
