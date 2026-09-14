@@ -6,6 +6,7 @@ import time
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
 
 SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRLCqyVMWlyCtUQI-oR3lTeOl35UeTQq7QhbOIjiccPzytIfSMvlElS7VQV30t283UR6CeHRdLnNVel/pub?output=csv"
 EXCLUIDOS = {9, 13, 20}
@@ -25,6 +26,15 @@ COLS = {
     "pp7": ["PP7. ¿Cuál es su situación laboral actual?"],
 }
 
+COLORES_PP1 = {
+    "Muy positiva":  "#1a6e35",
+    "Positiva":      "#4ade80",
+    "Neutra":        "#94a3b8",
+    "Negativa":      "#f97316",
+    "Muy negativa":  "#CE1126",
+    "No sabe / No responde": "#cbd5e1",
+}
+
 def get_col(df, key):
     for c in COLS[key]:
         if c in df.columns:
@@ -35,17 +45,26 @@ st.set_page_config(page_title="CC916501 · Reputación de Alcaldes", page_icon="
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap');
 html,body,[class*="css"]{font-family:'Inter',sans-serif}
 .header{background:#002470;border-radius:10px;padding:18px 24px 14px;margin-bottom:24px;
         border-left:8px solid;border-image:linear-gradient(180deg,#FFD100 33%,#003DA5 33% 66%,#CE1126 66%) 1}
 .h-tag{font-size:11px;color:#8B96A9;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}
 .h-tit{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:700;color:#fff}
 .h-sub{font-size:12px;color:#4ade80;margin-top:5px}
-.sec{font-size:12px;font-weight:700;color:#8B96A9;letter-spacing:.1em;text-transform:uppercase;margin:20px 0 8px}
+.ficha{background:#002470;border-radius:10px;padding:20px 24px;margin-bottom:20px;
+       border-left:8px solid;border-image:linear-gradient(180deg,#FFD100 33%,#003DA5 33% 66%,#CE1126 66%) 1}
+.ficha-ciudad{font-size:11px;color:#8B96A9;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px}
+.ficha-alcalde{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:700;color:#fff;line-height:1.1}
+.ficha-n{font-size:12px;color:#4ade80;margin-top:6px}
+.sec{font-size:11px;font-weight:700;color:#8B96A9;letter-spacing:.1em;text-transform:uppercase;margin:20px 0 8px}
+.kpi-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;text-align:center}
+.kpi-n{font-family:'Barlow Condensed',sans-serif;font-size:36px;font-weight:700;color:#002470}
+.kpi-l{font-size:11px;color:#8B96A9;text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
 </style>
 """, unsafe_allow_html=True)
 
+# ── HEADER GLOBAL ─────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="header">
   <div class="h-tag">CC916501 · CCD · Colombia 2026</div>
@@ -54,6 +73,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ── CARGA ─────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=INTERVALO, show_spinner=False)
 def cargar():
     df = pd.read_csv(SHEET_CSV)
@@ -83,85 +103,170 @@ c_pp5  = get_col(df, "pp5")
 c_pp6  = get_col(df, "pp6")
 c_pp7  = get_col(df, "pp7")
 
-# ── KPIs GLOBALES ─────────────────────────────────────────────────────────────
-k1, k2, k3 = st.columns(3)
-k1.metric("Respuestas completas", len(df), help="Excluidos #9, #13, #20")
-k2.metric("Municipios", df[c_muni].nunique() if c_muni else "—")
-k3.metric("Alcaldes evaluados", df[c_alc].nunique() if c_alc else "—")
-
-st.divider()
-
-# ── FILTROS ENCADENADOS ───────────────────────────────────────────────────────
-st.markdown('<div class="sec">Selecciona municipio y alcalde</div>', unsafe_allow_html=True)
-
-fa, fb = st.columns(2)
-
+# ── SELECTOR MUNICIPIO ────────────────────────────────────────────────────────
 munis = ["Todos"] + sorted(df[c_muni].dropna().astype(str).unique().tolist()) if c_muni else ["Todos"]
+fa, fb, fc = st.columns([2, 2, 1])
+
 with fa:
     f_muni = st.selectbox("Municipio", munis)
 
 df_muni = df[df[c_muni].astype(str) == f_muni] if f_muni != "Todos" and c_muni else df
 alcs = ["Todos"] + sorted(df_muni[c_alc].dropna().astype(str).unique().tolist()) if c_alc else ["Todos"]
 idx_alc = 1 if len(alcs) == 2 else 0
+
 with fb:
-    f_alc = st.selectbox("Alcalde evaluado", alcs, index=idx_alc)
+    f_alc = st.selectbox("Alcalde", alcs, index=idx_alc)
 
-if st.button("↺ Actualizar ahora"):
-    st.cache_data.clear()
-    st.rerun()
+with fc:
+    st.markdown("<br/>", unsafe_allow_html=True)
+    if st.button("↺ Actualizar", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
 
-# Aplicar filtros
+# Filtrar
 dff = df.copy()
 if f_muni != "Todos" and c_muni:
     dff = dff[dff[c_muni].astype(str) == f_muni]
 if f_alc != "Todos" and c_alc:
     dff = dff[dff[c_alc].astype(str) == f_alc]
 
-alcalde_titulo = f_alc if f_alc != "Todos" else (f_muni if f_muni != "Todos" else "Colombia")
-st.caption(f"Mostrando **{len(dff)}** respuestas — **{alcalde_titulo}**")
+st.divider()
+
+# ── FICHA DEL ALCALDE ─────────────────────────────────────────────────────────
+nombre_alcalde = f_alc if f_alc != "Todos" else "Todos los alcaldes"
+nombre_ciudad  = f_muni if f_muni != "Todos" else "Colombia"
+
+st.markdown(f"""
+<div class="ficha">
+  <div class="ficha-ciudad">📍 {nombre_ciudad}</div>
+  <div class="ficha-alcalde">{nombre_alcalde}</div>
+  <div class="ficha-n">● {len(dff)} respuestas completas analizadas</div>
+</div>
+""", unsafe_allow_html=True)
+
+# ── KPIs DE LA FICHA ──────────────────────────────────────────────────────────
+def pct_respuesta(serie, valor):
+    if len(serie) == 0: return "—"
+    v = str(valor).lower()
+    matches = serie.astype(str).str.lower().str.contains(v, na=False)
+    return f"{matches.sum() / len(serie) * 100:.1f}%"
+
+k1, k2, k3, k4 = st.columns(4)
+
+serie_pp1 = dff[c_pp1].dropna() if c_pp1 else pd.Series()
+positivas = serie_pp1.astype(str).str.lower().str.contains("positiv", na=False).sum()
+negativas = serie_pp1.astype(str).str.lower().str.contains("negativ", na=False).sum()
+pct_pos = f"{positivas/len(serie_pp1)*100:.1f}%" if len(serie_pp1) > 0 else "—"
+pct_neg = f"{negativas/len(serie_pp1)*100:.1f}%" if len(serie_pp1) > 0 else "—"
+
+serie_pp2 = dff[c_pp2].dropna() if c_pp2 else pd.Series()
+continua = serie_pp2.astype(str).str.lower().str.contains("continu", na=False).sum()
+cambia   = serie_pp2.astype(str).str.lower().str.contains("cambi|nueva", na=False).sum()
+pct_cont = f"{continua/len(serie_pp2)*100:.1f}%" if len(serie_pp2) > 0 else "—"
+pct_camb = f"{cambia/len(serie_pp2)*100:.1f}%" if len(serie_pp2) > 0 else "—"
+
+with k1:
+    st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#1a6e35">{pct_pos}</div><div class="kpi-l">Opinión positiva</div></div>', unsafe_allow_html=True)
+with k2:
+    st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#CE1126">{pct_neg}</div><div class="kpi-l">Opinión negativa</div></div>', unsafe_allow_html=True)
+with k3:
+    st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#003DA5">{pct_cont}</div><div class="kpi-l">Quiere continuidad</div></div>', unsafe_allow_html=True)
+with k4:
+    st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#7C3AED">{pct_camb}</div><div class="kpi-l">Quiere cambio</div></div>', unsafe_allow_html=True)
 
 st.divider()
 
 # ── FUNCIÓN PASTEL ─────────────────────────────────────────────────────────────
-def pastel(df, col_name, titulo):
+def pastel(df, col_name, titulo, colores=None):
     if not col_name or col_name not in df.columns:
         return
     serie = df[col_name].dropna().astype(str)
     serie = serie[serie.str.strip().str.len() > 0]
     if len(serie) == 0:
-        st.info(f"{titulo}: sin datos")
+        st.caption(f"{titulo}: sin datos")
         return
     vc = serie.value_counts().reset_index()
     vc.columns = ["Respuesta", "Cantidad"]
+    color_map = colores if colores else None
     fig = px.pie(
         vc, values="Cantidad", names="Respuesta",
         title=titulo,
+        color="Respuesta",
+        color_discrete_map=color_map,
         color_discrete_sequence=px.colors.qualitative.Safe,
-        hole=0.35,
+        hole=0.4,
     )
-    fig.update_traces(textposition="inside", textinfo="percent+label")
+    fig.update_traces(
+        textposition="inside",
+        textinfo="percent",
+        hovertemplate="<b>%{label}</b><br>%{value} respuestas (%{percent})<extra></extra>"
+    )
     fig.update_layout(
         showlegend=True,
-        legend=dict(orientation="v", x=1, y=0.5),
-        margin=dict(t=40, b=10, l=10, r=10),
-        height=320,
+        legend=dict(orientation="v", x=1.02, y=0.5, font=dict(size=11)),
+        margin=dict(t=45, b=10, l=10, r=120),
+        height=300,
+        title_font_size=13,
+        title_font_color="#002470",
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# ── RESULTADOS PP1 y PP2 ───────────────────────────────────────────────────────
+# ── PP1 y PP2 EN BARRAS HORIZONTALES ─────────────────────────────────────────
 st.markdown('<div class="sec">Resultados principales</div>', unsafe_allow_html=True)
+
+def barras(df, col_name, titulo, colores=None):
+    if not col_name or col_name not in df.columns:
+        return
+    serie = df[col_name].dropna().astype(str)
+    serie = serie[serie.str.strip().str.len() > 0]
+    if len(serie) == 0:
+        st.caption(f"{titulo}: sin datos")
+        return
+    total = len(serie)
+    vc = serie.value_counts().reset_index()
+    vc.columns = ["Respuesta", "Cantidad"]
+    vc["Porcentaje"] = (vc["Cantidad"] / total * 100).round(1)
+    vc = vc.sort_values("Porcentaje", ascending=True)
+
+    color_map = colores if colores else {}
+    colores_barras = [color_map.get(r, "#003DA5") for r in vc["Respuesta"]]
+
+    fig = go.Figure()
+    for i, row in vc.iterrows():
+        color = color_map.get(row["Respuesta"], "#003DA5") if color_map else "#003DA5"
+        fig.add_trace(go.Bar(
+            x=[row["Porcentaje"]],
+            y=[row["Respuesta"]],
+            orientation="h",
+            marker_color=color,
+            text=f"{row['Porcentaje']}%  ({row['Cantidad']})",
+            textposition="outside",
+            showlegend=False,
+            hovertemplate=f"<b>{row['Respuesta']}</b><br>{row['Cantidad']} respuestas ({row['Porcentaje']}%)<extra></extra>",
+        ))
+
+    fig.update_layout(
+        title=dict(text=titulo, font=dict(size=13, color="#002470")),
+        xaxis=dict(range=[0, 105], showticklabels=False, showgrid=False, zeroline=False),
+        yaxis=dict(automargin=True, tickfont=dict(size=12)),
+        margin=dict(t=45, b=10, l=10, r=100),
+        height=60 + len(vc) * 52,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        bargap=0.3,
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 r1, r2 = st.columns(2)
 with r1:
-    pastel(dff, c_pp1, "PP1 — Opinión de la gestión")
+    barras(dff, c_pp1, "PP1 — Opinión de la gestión del alcalde", COLORES_PP1)
 with r2:
-    pastel(dff, c_pp2, "PP2 — Continuidad vs cambio")
+    barras(dff, c_pp2, "PP2 — Continuidad vs cambio")
 
 st.divider()
 
-# ── PERFIL DEL ENCUESTADO ──────────────────────────────────────────────────────
+# ── PERFIL ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="sec">Perfil del encuestado</div>', unsafe_allow_html=True)
-
 p1, p2, p3 = st.columns(3)
 with p1:
     pastel(dff, c_pp4, "PP4 — Género")
