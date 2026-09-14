@@ -318,10 +318,11 @@ with r2:
 
 st.divider()
 
-# ── RANKING TOP 3 / PEOR 3 ───────────────────────────────────────────────────
-st.markdown('<div class="sec">Ranking nacional — PP1 Opinión de gestión</div>', unsafe_allow_html=True)
+# ── RANKING TOP 3 / PEOR 3 (solo sin filtros) ────────────────────────────────
+if f_muni == "Todos" and f_alc == "Todos":
+    st.markdown('<div class="sec">Ranking nacional — PP1 Opinión de gestión</div>', unsafe_allow_html=True)
 
-if c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
+if f_muni == "Todos" and f_alc == "Todos" and c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
     # Calcular % positivo por alcalde sobre TODOS los datos (sin filtro)
     tmp = df[[c_alc, c_pp1]].dropna()
     tmp = tmp[tmp[c_pp1].astype(str).str.strip().str.len() > 0]
