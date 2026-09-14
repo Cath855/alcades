@@ -140,38 +140,41 @@ def rpc(method, params):
         raise RuntimeError(result["status"])
     return result
 
+SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRLCqyVMWlyCtUQI-oR3lTeOl35UeTQq7QhbOIjiccPzytIfSMvlElS7VQV30t283UR6CeHRdLnNVel/pub?output=csv"
+
 @st.cache_data(ttl=INTERVALO, show_spinner=False)
 def cargar():
+    # Intentar LimeSurvey API primero
     key = None
     try:
         key = rpc("get_session_key", [USUARIO, PASSWORD])
         raw = rpc("export_responses", [key, SURVEY_ID, "json", None, "complete", "long", "full"])
-    finally:
-        if key:
-            try:
-                rpc("release_session_key", [key])
-            except Exception:
-                pass
-    try:
-        data = json.loads(base64.b64decode(raw).decode("utf-8"))
-    except:
-        data = raw if isinstance(raw, dict) else json.loads(raw)
-    filas = data.get("responses") or data.get("Responses") or []
-    if not isinstance(filas, list):
-        filas = list(filas.values())
-    df = pd.DataFrame(filas)
-    # Excluir IDs
+        try:
+            rpc("release_session_key", [key])
+        except Exception:
+            pass
+        try:
+            data = json.loads(base64.b64decode(raw).decode("utf-8"))
+        except Exception:
+            data = raw if isinstance(raw, dict) else json.loads(raw)
+        filas = data.get("responses") or data.get("Responses") or []
+        if not isinstance(filas, list):
+            filas = list(filas.values())
+        df = pd.DataFrame(filas)
+    except Exception:
+        # Fallback: Google Sheets
+        df = pd.read_csv(SHEET_CSV)
+
     c_id = get_col(df, "id")
     if c_id:
         df[c_id] = pd.to_numeric(df[c_id], errors="coerce")
         df = df[~df[c_id].isin(EXCLUIDOS)]
-    # Solo completas
     c_f = get_col(df, "fecha")
     if c_f:
         df = df[df[c_f].notna() & (df[c_f].astype(str).str.strip() != "N")]
     return df.reset_index(drop=True)
 
-with st.spinner("Consultando LimeSurvey…"):
+with st.spinner("Consultando datos…"):
     try:
         df = cargar()
     except Exception as e:
