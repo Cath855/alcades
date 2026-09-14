@@ -2,43 +2,39 @@
 CC916501 — Encuesta de Reputación de Alcaldes · Colombia 2026
 Visor en línea · CCD Área de Innovación
 """
-
 import time
 from datetime import datetime
-
 import pandas as pd
 import streamlit as st
 
-# ── CONFIGURACIÓN ────────────────────────────────────────────────────────────
+# ── CONFIGURACIÓN ─────────────────────────────────────────────────────────────
 SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRLCqyVMWlyCtUQI-oR3lTeOl35UeTQq7QhbOIjiccPzytIfSMvlElS7VQV30t283UR6CeHRdLnNVel/pub?output=csv"
 EXCLUIDOS = {9, 13, 20}
 INTERVALO = 60
 
-# Posibles nombres de columna para cada variable (LimeSurvey varía según config)
+# Nombres posibles de cada columna en el CSV exportado de LimeSurvey
 COLS = {
-    "municipio":   ["G01Q01","G01Q001","municipio","MUNICIPIO"],
-    "alcalde":     ["G01Q02","G01Q002","alcalde","ALCALDE"],
-    "pp1":         ["PP1","G02Q01","pp1"],
-    "pp2":         ["PP2","G02Q02","pp2"],
-    "pp3_edad":    ["PP3","G03Q01","pp3","edad","EDAD"],
-    "pp4_genero":  ["PP4","G03Q02","pp4","genero","GENERO","género"],
-    "pp5_estrato": ["PP5","G03Q03","pp5","estrato","ESTRATO"],
-    "pp6_educ":    ["PP6","G03Q04","pp6","educacion","EDUCACION","educación"],
-    "pp7_laboral": ["PP7","G03Q05","pp7","laboral","LABORAL"],
+    "id":       ["id", "ID de respuesta", "Response ID"],
+    "fecha":    ["submitdate", "Fecha de envío", "Date submitted"],
+    "municipio":["G01Q01", "municipio", "MUNICIPIO", "Municipio"],
+    "alcalde":  ["G01Q02", "alcalde",   "ALCALDE",   "Alcalde"],
+    "pp1":      ["PP1", "pp1", "G02Q01"],
+    "pp2":      ["PP2", "pp2", "G02Q02"],
+    "pp3":      ["PP3", "pp3", "G03Q01", "Rango de edad"],
+    "pp4":      ["PP4", "pp4", "G03Q02", "Género", "Genero"],
+    "pp5":      ["PP5", "pp5", "G03Q03", "Estrato"],
+    "pp6":      ["PP6", "pp6", "G03Q04", "Nivel educativo"],
+    "pp7":      ["PP7", "pp7", "G03Q05", "Situación laboral"],
 }
 
-def encontrar_col(df, candidatos):
-    for c in candidatos:
+def col(df, key):
+    for c in COLS[key]:
         if c in df.columns:
             return c
     return None
 
-# ── PÁGINA ───────────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="CC916501 · Reputación de Alcaldes",
-    page_icon="🏛️",
-    layout="wide",
-)
+# ── PÁGINA ────────────────────────────────────────────────────────────────────
+st.set_page_config(page_title="CC916501 · Reputación de Alcaldes", page_icon="🏛️", layout="wide")
 
 st.markdown("""
 <style>
@@ -49,14 +45,10 @@ html,body,[class*="css"]{font-family:'Inter',sans-serif}
 .h-tag{font-size:11px;color:#8B96A9;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}
 .h-tit{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:700;color:#fff}
 .h-sub{font-size:12px;color:#4ade80;margin-top:5px}
-.excl{background:#FFF0F0;border:1px solid #FFCDD2;color:#CE1126;border-radius:4px;
-      padding:3px 10px;font-size:11px;font-weight:600;display:inline-block;margin-bottom:8px}
-.sec{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;
-     color:#8B96A9;letter-spacing:.1em;text-transform:uppercase;margin:4px 0 8px}
+.sec{font-size:12px;font-weight:700;color:#8B96A9;letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px}
 </style>
 """, unsafe_allow_html=True)
 
-# ── HEADER ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="header">
   <div class="h-tag">CC916501 · CCD · Colombia 2026</div>
@@ -65,188 +57,177 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── API LimeSurvey ────────────────────────────────────────────────────────────
-
+# ── CARGA ─────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=INTERVALO, show_spinner=False)
-def cargar_datos():
-    """Lee datos desde Google Sheets publicado como CSV."""
+def cargar():
     df = pd.read_csv(SHEET_CSV)
-    
-    # Excluir IDs configurados
-    id_col = next((c for c in ["id","ID de respuesta","ID","response_id"] if c in df.columns), None)
-    if id_col:
-        df[id_col] = pd.to_numeric(df[id_col], errors="coerce")
-        df = df[~df[id_col].isin(EXCLUIDOS)]
-    
-    # Solo completas (tienen fecha de envío válida)
-    fecha_col = next((c for c in ["submitdate","Fecha de envío","fecha_envio","Date submitted"] if c in df.columns), None)
-    if fecha_col:
-        df = df[df[fecha_col].notna() & (df[fecha_col].astype(str) != "N")]
-    
+    # Excluir IDs
+    c_id = col(df, "id")
+    if c_id:
+        df[c_id] = pd.to_numeric(df[c_id], errors="coerce")
+        df = df[~df[c_id].isin(EXCLUIDOS)]
+    # Solo completas
+    c_f = col(df, "fecha")
+    if c_f:
+        df = df[df[c_f].notna() & (df[c_f].astype(str).str.strip() != "N")]
     return df.reset_index(drop=True)
 
-# ── CARGA ─────────────────────────────────────────────────────────────────────
-with st.spinner("Consultando LimeSurvey…"):
+with st.spinner("Cargando datos…"):
     try:
-        df = cargar_datos()
+        df = cargar()
         error = None
     except Exception as e:
         df = pd.DataFrame()
         error = str(e)
 
 if error:
-    st.error(f"⚠️ No se pudo conectar: {error}")
+    st.error(f"⚠️ Error al cargar datos: {error}")
     st.stop()
-
-# Detectar columnas reales
-col = {k: encontrar_col(df, v) for k, v in COLS.items()}
 
 # ── KPIs ──────────────────────────────────────────────────────────────────────
 ahora = datetime.now()
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Respuestas completas", len(df), help="Excluidos #9, #13, #20")
-k2.metric("Municipios", df[col["municipio"]].nunique() if col["municipio"] else "—")
-k3.metric("Alcaldes evaluados", df[col["alcalde"]].nunique() if col["alcalde"] else "—")
+c_muni = col(df, "municipio")
+c_alc  = col(df, "alcalde")
+k2.metric("Municipios", df[c_muni].nunique() if c_muni else "—")
+k3.metric("Alcaldes evaluados", df[c_alc].nunique() if c_alc else "—")
 k4.metric("Actualización", ahora.strftime("%H:%M"), help=ahora.strftime("%d %b %Y"))
 
 st.divider()
 
 # ── FILTROS ───────────────────────────────────────────────────────────────────
-st.markdown('<div class="sec">Filtros de ubicación y resultado</div>', unsafe_allow_html=True)
-fa, fb, fc = st.columns(3)
+st.markdown('<div class="sec">Filtros</div>', unsafe_allow_html=True)
 
 def opts(c, base=None):
-    """Opciones únicas de columna c, opcionalmente sobre un df filtrado (base)."""
     src = base if base is not None else df
     if not c or c not in src.columns:
         return ["Todos"]
     return ["Todos"] + sorted(src[c].dropna().astype(str).unique().tolist())
 
+fa, fb = st.columns(2)
 with fa:
-    f_muni = st.selectbox("Municipio", opts(col["municipio"]))
+    f_muni = st.selectbox("Municipio", opts(c_muni))
 
-# Filtrar el df solo por municipio para alimentar el selector de alcalde
-df_por_muni = df.copy()
-if f_muni != "Todos" and col["municipio"] and col["municipio"] in df.columns:
-    df_por_muni = df_por_muni[df_por_muni[col["municipio"]].astype(str) == f_muni]
-
+# Filtrar alcaldes según municipio seleccionado
+df_muni = df[df[c_muni].astype(str) == f_muni] if f_muni != "Todos" and c_muni else df
 with fb:
-    opciones_alcalde = opts(col["alcalde"], base=df_por_muni)
-    # Si solo hay un alcalde en el municipio lo preseleccionamos
-    idx_alcalde = 1 if len(opciones_alcalde) == 2 else 0
-    f_alcalde = st.selectbox("Alcalde evaluado", opciones_alcalde, index=idx_alcalde)
-with fc:
-    f_pp1 = st.selectbox("PP1 — Opinión de gestión", opts(col["pp1"]))
+    alc_opts = opts(c_alc, base=df_muni)
+    idx = 1 if len(alc_opts) == 2 else 0
+    f_alc = st.selectbox("Alcalde evaluado", alc_opts, index=idx)
 
-st.markdown('<div class="sec" style="margin-top:12px">Perfil del encuestado</div>', unsafe_allow_html=True)
+st.markdown('<div class="sec">Perfil del encuestado</div>', unsafe_allow_html=True)
 g1, g2, g3, g4, g5 = st.columns(5)
-with g1:
-    f_edad    = st.selectbox("PP3 Rango de edad",   opts(col["pp3_edad"]))
-with g2:
-    f_genero  = st.selectbox("PP4 Género",           opts(col["pp4_genero"]))
-with g3:
-    f_estrato = st.selectbox("PP5 Estrato",          opts(col["pp5_estrato"]))
-with g4:
-    f_educ    = st.selectbox("PP6 Nivel educativo",  opts(col["pp6_educ"]))
-with g5:
-    f_laboral = st.selectbox("PP7 Situación laboral",opts(col["pp7_laboral"]))
+with g1: f_pp3 = st.selectbox("PP3 Edad",     opts(col(df,"pp3")))
+with g2: f_pp4 = st.selectbox("PP4 Género",   opts(col(df,"pp4")))
+with g3: f_pp5 = st.selectbox("PP5 Estrato",  opts(col(df,"pp5")))
+with g4: f_pp6 = st.selectbox("PP6 Educación",opts(col(df,"pp6")))
+with g5: f_pp7 = st.selectbox("PP7 Laboral",  opts(col(df,"pp7")))
 
-# Botones
-bc1, bc2, bc3 = st.columns([1,1,4])
-with bc1:
-    if st.button("↺ Actualizar ahora", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
+if st.button("↺ Actualizar ahora"):
+    st.cache_data.clear()
+    st.rerun()
 
 # ── APLICAR FILTROS ───────────────────────────────────────────────────────────
 dff = df.copy()
-def aplicar(dff, col_name, valor):
-    if valor != "Todos" and col_name and col_name in dff.columns:
-        dff = dff[dff[col_name].astype(str) == valor]
+def filtrar(dff, c, v):
+    if v != "Todos" and c and c in dff.columns:
+        dff = dff[dff[c].astype(str) == v]
     return dff
 
-dff = aplicar(dff, col["municipio"],    f_muni)
-dff = aplicar(dff, col["alcalde"],      f_alcalde)
-dff = aplicar(dff, col["pp1"],          f_pp1)
-dff = aplicar(dff, col["pp3_edad"],     f_edad)
-dff = aplicar(dff, col["pp4_genero"],   f_genero)
-dff = aplicar(dff, col["pp5_estrato"],  f_estrato)
-dff = aplicar(dff, col["pp6_educ"],     f_educ)
-dff = aplicar(dff, col["pp7_laboral"],  f_laboral)
+dff = filtrar(dff, c_muni,        f_muni)
+dff = filtrar(dff, c_alc,         f_alc)
+dff = filtrar(dff, col(df,"pp3"), f_pp3)
+dff = filtrar(dff, col(df,"pp4"), f_pp4)
+dff = filtrar(dff, col(df,"pp5"), f_pp5)
+dff = filtrar(dff, col(df,"pp6"), f_pp6)
+dff = filtrar(dff, col(df,"pp7"), f_pp7)
 
 st.caption(f"Mostrando **{len(dff)}** de **{len(df)}** respuestas completas")
-st.markdown('<div class="excl">Excluidos: #9 · #13 · #20 · Solo completas</div>', unsafe_allow_html=True)
 
-# ── TABLA ─────────────────────────────────────────────────────────────────────
-cols_tabla = []
-for k in ["municipio","alcalde","pp1","pp2","pp3_edad","pp4_genero","pp5_estrato","pp6_educ","pp7_laboral"]:
-    if col[k]:
-        cols_tabla.append(col[k])
-
-meta = {"id","token","submitdate","startdate","datestamp","ipaddr","lastpage","startlanguage","seed","refurl"}
-if "id" in dff.columns:
-    cols_tabla = ["id"] + [c for c in cols_tabla if c != "id"]
-
-tabla = dff[[c for c in cols_tabla if c in dff.columns]]
-st.dataframe(tabla, use_container_width=True, height=380, hide_index=True)
-
-# ── GRÁFICAS PP1 y PP2 ────────────────────────────────────────────────────────
 st.divider()
-st.subheader("Resultados principales")
-g1, g2 = st.columns(2)
 
-with g1:
-    if col["pp1"] and col["pp1"] in dff.columns:
-        st.markdown("**PP1 — Opinión de la gestión del alcalde**")
-        vc1 = dff[col["pp1"]].dropna().value_counts()
-        st.bar_chart(vc1, height=260)
+# ── RESULTADOS PP1 y PP2 ──────────────────────────────────────────────────────
+st.markdown('<div class="sec">Resultados</div>', unsafe_allow_html=True)
 
-with g2:
-    if col["pp2"] and col["pp2"] in dff.columns:
-        st.markdown("**PP2 — Continuidad vs cambio**")
-        vc2 = dff[col["pp2"]].dropna().value_counts()
-        st.bar_chart(vc2, height=260)
+def mostrar_resultado(df, key, titulo, pregunta):
+    c = col(df, key)
+    if not c or c not in df.columns:
+        st.warning(f"{titulo}: columna no encontrada")
+        return
+    serie = df[c].dropna().astype(str)
+    serie = serie[serie.str.strip().str.len() > 0]
+    if len(serie) == 0:
+        st.info(f"{titulo}: sin respuestas aún")
+        return
 
-# ── PERFIL SOCIODEMOGRÁFICO ───────────────────────────────────────────────────
+    total = len(serie)
+    vc = serie.value_counts()
+
+    st.markdown(f"**{titulo}**")
+    st.caption(pregunta)
+
+    for opcion, cnt in vc.items():
+        pct = cnt / total * 100
+        col_lbl, col_bar, col_pct = st.columns([2, 5, 1])
+        with col_lbl:
+            st.markdown(f"<p style='margin:6px 0;font-size:13px'>{opcion}</p>", unsafe_allow_html=True)
+        with col_bar:
+            st.progress(int(pct))
+        with col_pct:
+            st.markdown(f"<p style='margin:6px 0;font-size:13px;font-weight:600'>{pct:.1f}%<br/><span style='font-weight:400;color:#888'>({cnt})</span></p>", unsafe_allow_html=True)
+
+r1, r2 = st.columns(2)
+with r1:
+    mostrar_resultado(dff, "pp1",
+        "PP1 — Opinión de la gestión del alcalde",
+        "¿Tiene usted una opinión positiva o negativa de la gestión del alcalde?")
+with r2:
+    mostrar_resultado(dff, "pp2",
+        "PP2 — Continuidad vs cambio",
+        "¿Preferiría que el próximo alcalde continúe con las obras o establezca nuevas prioridades?")
+
 st.divider()
-st.subheader("Perfil del encuestado")
-p1, p2, p3 = st.columns(3)
+st.markdown('<div class="sec">Resultados por perfil del encuestado</div>', unsafe_allow_html=True)
 
-with p1:
-    if col["pp4_genero"] and col["pp4_genero"] in dff.columns:
-        st.markdown("**PP4 — Género**")
-        st.bar_chart(dff[col["pp4_genero"]].dropna().value_counts(), height=220)
+def cruce(df, col_perfil, label_perfil, col_resultado, label_resultado):
+    cp = col(df, col_perfil)
+    cr = col(df, col_resultado)
+    if not cp or not cr or cp not in df.columns or cr not in df.columns:
+        return
+    tmp = df[[cp, cr]].dropna()
+    tmp = tmp[tmp[cp].astype(str).str.strip().str.len() > 0]
+    tmp = tmp[tmp[cr].astype(str).str.strip().str.len() > 0]
+    if len(tmp) == 0:
+        return
+    tabla = tmp.groupby([cp, cr]).size().unstack(fill_value=0)
+    tabla_pct = tabla.div(tabla.sum(axis=1), axis=0) * 100
+    st.markdown(f"**{label_perfil} × {label_resultado}**")
+    st.bar_chart(tabla_pct, height=220)
 
-with p2:
-    if col["pp3_edad"] and col["pp3_edad"] in dff.columns:
-        st.markdown("**PP3 — Rango de edad**")
-        st.bar_chart(dff[col["pp3_edad"]].dropna().value_counts(), height=220)
+st.markdown("##### PP1 — Opinión de gestión según perfil")
+c1, c2 = st.columns(2)
+with c1:
+    cruce(dff, "pp4", "Género",        "pp1", "PP1")
+    cruce(dff, "pp5", "Estrato",       "pp1", "PP1")
+with c2:
+    cruce(dff, "pp3", "Edad",          "pp1", "PP1")
+    cruce(dff, "pp6", "Educación",     "pp1", "PP1")
+cruce(dff, "pp7", "Situación laboral", "pp1", "PP1")
 
-with p3:
-    if col["pp5_estrato"] and col["pp5_estrato"] in dff.columns:
-        st.markdown("**PP5 — Estrato socioeconómico**")
-        st.bar_chart(dff[col["pp5_estrato"]].dropna().value_counts(), height=220)
-
-p4, p5, _ = st.columns(3)
-with p4:
-    if col["pp6_educ"] and col["pp6_educ"] in dff.columns:
-        st.markdown("**PP6 — Nivel educativo**")
-        st.bar_chart(dff[col["pp6_educ"]].dropna().value_counts(), height=220)
-with p5:
-    if col["pp7_laboral"] and col["pp7_laboral"] in dff.columns:
-        st.markdown("**PP7 — Situación laboral**")
-        st.bar_chart(dff[col["pp7_laboral"]].dropna().value_counts(), height=220)
-
-# ── DESCARGA ──────────────────────────────────────────────────────────────────
 st.divider()
-csv = dff.to_csv(index=False).encode("utf-8")
-st.download_button(
-    "⬇ Descargar datos filtrados (.csv)",
-    data=csv,
-    file_name=f"CC916501_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-    mime="text/csv",
-)
+st.markdown("##### PP2 — Continuidad vs cambio según perfil")
+c3, c4 = st.columns(2)
+with c3:
+    cruce(dff, "pp4", "Género",        "pp2", "PP2")
+    cruce(dff, "pp5", "Estrato",       "pp2", "PP2")
+with c4:
+    cruce(dff, "pp3", "Edad",          "pp2", "PP2")
+    cruce(dff, "pp6", "Educación",     "pp2", "PP2")
+cruce(dff, "pp7", "Situación laboral", "pp2", "PP2")
 
 # ── AUTO-REFRESCO ─────────────────────────────────────────────────────────────
 time.sleep(INTERVALO)
 st.rerun()
+
+# ── CRUCES SOCIODEMOGRÁFICOS ──────────────────────────────────────────────────
