@@ -3,22 +3,13 @@ CC916501 — Encuesta de Reputación de Alcaldes · Colombia 2026
 Visor en línea · CCD Área de Innovación
 """
 import time
-import base64
-import json
-import requests
-import urllib3
 import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 # ── CONFIGURACIÓN ─────────────────────────────────────────────────────────────
-BASE_URL  = "https://encuestas.cnccol.com/index.php/admin/remotecontrol"
-USUARIO   = "api_visor"
-PASSWORD  = "Av3594fmcxais3CxEC4DAjr"
-SURVEY_ID = "916501"
+SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRLCqyVMWlyCtUQI-oR3lTeOl35UeTQq7QhbOIjiccPzytIfSMvlElS7VQV30t283UR6CeHRdLnNVel/pub?output=csv"
 EXCLUIDOS = {9, 13, 20}
 INTERVALO = 60
 
@@ -121,46 +112,19 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── API LIMESURVEY ─────────────────────────────────────────────────────────────
-def rpc(method, params):
-    r = requests.post(BASE_URL,
-                      json={"method": method, "params": params, "id": 1},
-                      headers={"Content-Type": "application/json"},
-                      timeout=30, verify=False)
-    r.raise_for_status()
-    result = r.json().get("result")
-    if isinstance(result, dict) and "status" in result:
-        raise RuntimeError(result["status"])
-    return result
-
 @st.cache_data(ttl=INTERVALO, show_spinner=False)
 def cargar():
-    key = rpc("get_session_key", [USUARIO, PASSWORD])
-    raw = rpc("export_responses", [key, SURVEY_ID, "json", None, "complete", "long", "full"])
-    try:
-        rpc("release_session_key", [key])
-    except:
-        pass
-    try:
-        data = json.loads(base64.b64decode(raw).decode("utf-8"))
-    except:
-        data = raw if isinstance(raw, dict) else json.loads(raw)
-    filas = data.get("responses") or data.get("Responses") or []
-    if not isinstance(filas, list):
-        filas = list(filas.values())
-    df = pd.DataFrame(filas)
-    # Excluir IDs
+    df = pd.read_csv(SHEET_CSV)
     c_id = get_col(df, "id")
     if c_id:
         df[c_id] = pd.to_numeric(df[c_id], errors="coerce")
         df = df[~df[c_id].isin(EXCLUIDOS)]
-    # Solo completas
     c_f = get_col(df, "fecha")
     if c_f:
         df = df[df[c_f].notna() & (df[c_f].astype(str).str.strip() != "N")]
     return df.reset_index(drop=True)
 
-with st.spinner("Consultando LimeSurvey…"):
+with st.spinner("Cargando datos…"):
     try:
         df = cargar()
     except Exception as e:
