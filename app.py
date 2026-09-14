@@ -79,11 +79,12 @@ if not st.session_state.autenticado:
     with col2:
         clave = st.text_input("Clave", type="password", placeholder="Clave de acceso",
                               label_visibility="collapsed")
-        if st.button("Ingresar", use_container_width=True):
+        ingresar = st.button("Ingresar", use_container_width=True)
+        if ingresar or clave == "CNC2026*":
             if clave == "CNC2026*":
                 st.session_state.autenticado = True
                 st.rerun()
-            else:
+            elif ingresar:
                 st.error("Clave incorrecta — intenta de nuevo")
     st.stop()
 
@@ -319,66 +320,66 @@ with r2:
 st.divider()
 
 # ── RANKING TOP 3 / PEOR 3 (solo sin filtros) ────────────────────────────────
-if f_muni == "Todos" and f_alc == "Todos":
-    st.markdown('<div class="sec">Ranking nacional — PP1 Opinión de gestión</div>', unsafe_allow_html=True)
-
 if f_muni == "Todos" and f_alc == "Todos" and c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
+    st.markdown('<div class="sec">Ranking nacional — PP1 Opinión de gestión</div>', unsafe_allow_html=True)
+    if True:
     # Calcular % positivo por alcalde sobre TODOS los datos (sin filtro)
-    tmp = df[[c_alc, c_pp1]].dropna()
-    tmp = tmp[tmp[c_pp1].astype(str).str.strip().str.len() > 0]
+        tmp = df[[c_alc, c_pp1]].dropna()
+        tmp = tmp[tmp[c_pp1].astype(str).str.strip().str.len() > 0]
     
-    def pct_pos(serie):
-        return serie.astype(str).str.lower().str.contains("positiv", na=False).sum() / len(serie) * 100
+        def pct_pos(serie):
+            return serie.astype(str).str.lower().str.contains("positiv", na=False).sum() / len(serie) * 100
 
-    ranking = tmp.groupby(c_alc)[c_pp1].apply(pct_pos).reset_index()
-    ranking.columns = ["Alcalde", "% Positiva"]
-    ranking["% Positiva"] = ranking["% Positiva"].round(1)
-    ranking["n"] = tmp.groupby(c_alc)[c_pp1].count().values
-    MIN_RESP = 20
-    ranking = ranking[ranking["n"] >= MIN_RESP]
-    ranking = ranking.sort_values("% Positiva", ascending=False).reset_index(drop=True)
+        ranking = tmp.groupby(c_alc)[c_pp1].apply(pct_pos).reset_index()
+        ranking.columns = ["Alcalde", "% Positiva"]
+        ranking["% Positiva"] = ranking["% Positiva"].round(1)
+        ranking["n"] = tmp.groupby(c_alc)[c_pp1].count().values
+        MIN_RESP = 20
+        ranking = ranking[ranking["n"] >= MIN_RESP]
+        ranking = ranking.sort_values("% Positiva", ascending=False).reset_index(drop=True)
 
-    # Traer ciudad de cada alcalde
-    ciudad_por_alcalde = df.groupby(c_alc)[c_muni].agg(lambda x: x.value_counts().index[0] if len(x) > 0 else "—")
+        # Traer ciudad de cada alcalde
+        ciudad_por_alcalde = df.groupby(c_alc)[c_muni].agg(lambda x: x.value_counts().index[0] if len(x) > 0 else "—")
 
-    top3  = ranking.head(3).copy()
-    peor3 = ranking.tail(3).sort_values("% Positiva", ascending=True).copy()
+        top3  = ranking.head(3).copy()
+        peor3 = ranking.tail(3).sort_values("% Positiva", ascending=True).copy()
 
-    st.caption(f"⚠️ El ranking se calcula con base en el porcentaje de opinión positiva (PP1). Solo se incluyen alcaldes con mínimo {MIN_RESP} respuestas registradas.")
+        st.caption(f"⚠️ El ranking se calcula con base en el porcentaje de opinión positiva (PP1). Solo se incluyen alcaldes con mínimo {MIN_RESP} respuestas registradas.")
 
-    ra, rb = st.columns(2)
+        ra, rb = st.columns(2)
 
-    with ra:
-        st.markdown("🏆 **Mejor calificados**")
-        for i, row in top3.iterrows():
-            medal = ["🥇","🥈","🥉"][i]
-            ciudad = ciudad_por_alcalde.get(row["Alcalde"], "—")
-            st.markdown(f"""
-            <div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;
-                        padding:10px 14px;margin-bottom:8px">
-              <div style="display:flex;justify-content:space-between;align-items:center">
-                <span style="font-size:13px;font-weight:600">{medal} {row['Alcalde']}</span>
-                <span style="font-size:20px;font-weight:700;color:#15803d">{row['% Positiva']}%</span>
-              </div>
-              <div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {ciudad} · {int(row['n'])} respuestas</div>
-            </div>
-            """, unsafe_allow_html=True)
+        with ra:
+            st.markdown("🏆 **Mejor calificados**")
+            for i, row in top3.iterrows():
+                medal = ["🥇","🥈","🥉"][i]
+                ciudad = ciudad_por_alcalde.get(row["Alcalde"], "—")
+                st.markdown(f"""
+                <div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;
+                            padding:10px 14px;margin-bottom:8px">
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:13px;font-weight:600">{medal} {row['Alcalde']}</span>
+                    <span style="font-size:20px;font-weight:700;color:#15803d">{row['% Positiva']}%</span>
+                  </div>
+                  <div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {ciudad} · {int(row['n'])} respuestas</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-    with rb:
-        st.markdown("⚠️ **Peor calificados**")
-        for j, (_, row) in enumerate(peor3.iterrows()):
-            medal = ["🔴","🟠","🟡"][j]
-            ciudad = ciudad_por_alcalde.get(row["Alcalde"], "—")
-            st.markdown(f"""
-            <div style="background:#fff7f7;border-left:4px solid #ef4444;border-radius:6px;
-                        padding:10px 14px;margin-bottom:8px">
-              <div style="display:flex;justify-content:space-between;align-items:center">
-                <span style="font-size:13px;font-weight:600">{medal} {row['Alcalde']}</span>
-                <span style="font-size:20px;font-weight:700;color:#CE1126">{row['% Positiva']}%</span>
-              </div>
-              <div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {ciudad} · {int(row['n'])} respuestas</div>
-            </div>
-            """, unsafe_allow_html=True)
+        with rb:
+            st.markdown("⚠️ **Peor calificados**")
+            for j, (_, row) in enumerate(peor3.iterrows()):
+                medal = ["🔴","🟠","🟡"][j]
+                ciudad = ciudad_por_alcalde.get(row["Alcalde"], "—")
+                st.markdown(f"""
+                <div style="background:#fff7f7;border-left:4px solid #ef4444;border-radius:6px;
+                            padding:10px 14px;margin-bottom:8px">
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:13px;font-weight:600">{medal} {row['Alcalde']}</span>
+                    <span style="font-size:20px;font-weight:700;color:#CE1126">{row['% Positiva']}%</span>
+                  </div>
+                  <div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {ciudad} · {int(row['n'])} respuestas</div>
+                </div>
+                """, unsafe_allow_html=True)
+
 
 st.divider()
 
