@@ -49,30 +49,42 @@ if "autenticado" not in st.session_state:
 
 if not st.session_state.autenticado:
     st.markdown("""
-    <div style="max-width:380px;margin:80px auto;padding:36px 32px;background:#fff;
-         border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 4px 24px rgba(0,36,112,.08)">
-      <div style="text-align:center;margin-bottom:24px">
-        <div style="font-size:11px;color:#8B96A9;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px">
-          CC916501 · CCD · Colombia 2026
-        </div>
-        <div style="font-family:sans-serif;font-size:20px;font-weight:700;color:#002470">
-          Reputación de Alcaldes
-        </div>
-        <div style="font-size:13px;color:#8B96A9;margin-top:4px">Ingresa la clave para continuar</div>
+    <style>
+    .login-wrap{display:flex;justify-content:center;align-items:center;min-height:80vh}
+    .login-box{background:#fff;border-radius:14px;border:1px solid #e2e8f0;
+               box-shadow:0 8px 32px rgba(0,36,112,.12);padding:44px 40px;width:100%;max-width:400px;text-align:center}
+    .login-franja{height:6px;border-radius:3px;background:linear-gradient(90deg,#FFD100 33%,#003DA5 33% 66%,#CE1126 66%);
+                  margin-bottom:28px}
+    .login-tag{font-size:10px;color:#8B96A9;letter-spacing:.14em;text-transform:uppercase;margin-bottom:6px}
+    .login-tit{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:700;color:#002470;margin-bottom:4px}
+    .login-sub{font-size:13px;color:#94a3b8;margin-bottom:28px}
+    .stTextInput input{text-align:center;font-size:15px;letter-spacing:.1em;border-radius:8px}
+    div.stButton button{background:#002470!important;color:#fff!important;border:none!important;
+                        border-radius:8px!important;padding:10px!important;font-size:15px!important;
+                        font-weight:600!important;width:100%;margin-top:8px;
+                        transition:background .2s}
+    div.stButton button:hover{background:#003DA5!important}
+    </style>
+    <div class="login-wrap">
+      <div class="login-box">
+        <div class="login-franja"></div>
+        <div class="login-tag">CC916501 · CCD · Colombia 2026</div>
+        <div class="login-tit">Reputación de Alcaldes</div>
+        <div class="login-sub">Ingresa la clave para acceder al visor</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
-    
-    col_c, col_r = st.columns([1,1])
-    with col_c:
-        clave = st.text_input("Clave de acceso", type="password", placeholder="••••••••",
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        clave = st.text_input("Clave", type="password", placeholder="Clave de acceso",
                               label_visibility="collapsed")
         if st.button("Ingresar", use_container_width=True):
             if clave == "CNC2026*":
                 st.session_state.autenticado = True
                 st.rerun()
             else:
-                st.error("Clave incorrecta")
+                st.error("Clave incorrecta — intenta de nuevo")
     st.stop()
 
 st.markdown("""
@@ -312,11 +324,17 @@ if c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
     ranking.columns = ["Alcalde", "% Positiva"]
     ranking["% Positiva"] = ranking["% Positiva"].round(1)
     ranking["n"] = tmp.groupby(c_alc)[c_pp1].count().values
-    ranking = ranking[ranking["n"] >= 5]  # mínimo 5 respuestas
+    MIN_RESP = 20
+    ranking = ranking[ranking["n"] >= MIN_RESP]
     ranking = ranking.sort_values("% Positiva", ascending=False).reset_index(drop=True)
 
-    top3  = ranking.head(3)
-    peor3 = ranking.tail(3).sort_values("% Positiva", ascending=True)
+    # Traer ciudad de cada alcalde
+    ciudad_por_alcalde = df.groupby(c_alc)[c_muni].agg(lambda x: x.value_counts().index[0] if len(x) > 0 else "—")
+
+    top3  = ranking.head(3).copy()
+    peor3 = ranking.tail(3).sort_values("% Positiva", ascending=True).copy()
+
+    st.caption(f"⚠️ El ranking se calcula con base en el porcentaje de opinión positiva (PP1). Solo se incluyen alcaldes con mínimo {MIN_RESP} respuestas registradas.")
 
     ra, rb = st.columns(2)
 
@@ -324,11 +342,15 @@ if c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
         st.markdown("🏆 **Mejor calificados**")
         for i, row in top3.iterrows():
             medal = ["🥇","🥈","🥉"][i]
+            ciudad = ciudad_por_alcalde.get(row["Alcalde"], "—")
             st.markdown(f"""
             <div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;
-                        padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-              <span style="font-size:13px">{medal} {row['Alcalde']}</span>
-              <span style="font-family:sans-serif;font-size:18px;font-weight:700;color:#15803d">{row['% Positiva']}%</span>
+                        padding:10px 14px;margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:13px;font-weight:600">{medal} {row['Alcalde']}</span>
+                <span style="font-size:20px;font-weight:700;color:#15803d">{row['% Positiva']}%</span>
+              </div>
+              <div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {ciudad} · {int(row['n'])} respuestas</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -336,11 +358,15 @@ if c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
         st.markdown("⚠️ **Peor calificados**")
         for j, (_, row) in enumerate(peor3.iterrows()):
             medal = ["🔴","🟠","🟡"][j]
+            ciudad = ciudad_por_alcalde.get(row["Alcalde"], "—")
             st.markdown(f"""
             <div style="background:#fff7f7;border-left:4px solid #ef4444;border-radius:6px;
-                        padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-              <span style="font-size:13px">{medal} {row['Alcalde']}</span>
-              <span style="font-family:sans-serif;font-size:18px;font-weight:700;color:#CE1126">{row['% Positiva']}%</span>
+                        padding:10px 14px;margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:13px;font-weight:600">{medal} {row['Alcalde']}</span>
+                <span style="font-size:20px;font-weight:700;color:#CE1126">{row['% Positiva']}%</span>
+              </div>
+              <div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {ciudad} · {int(row['n'])} respuestas</div>
             </div>
             """, unsafe_allow_html=True)
 
