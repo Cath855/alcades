@@ -5,34 +5,32 @@ Visor en línea · CCD Área de Innovación
 import time
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 
-# ── CONFIGURACIÓN ─────────────────────────────────────────────────────────────
 SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRLCqyVMWlyCtUQI-oR3lTeOl35UeTQq7QhbOIjiccPzytIfSMvlElS7VQV30t283UR6CeHRdLnNVel/pub?output=csv"
 EXCLUIDOS = {9, 13, 20}
 INTERVALO = 60
 
-# Nombres exactos de columnas según exportación LimeSurvey CC916501
 COLS = {
-    "id":       ["ID de respuesta"],
-    "fecha":    ["Fecha de envío"],
-    "municipio":["Municipio", "PF2. ¿En qué ciudad reside actualmente?"],
-    "alcalde":  ["Alcalde", "{if(CIUDAD.NAOK == 1, \"Juan Alfredo Qüenza Ramos\", if(CIUDAD.NAOK == 2, \"James Padilla García\", if(CIUDAD.NAOK == 3, \"Alejandro Char Chaljub\", if(CIUDAD.NAOK == 4, \"Carlos Fernando Galán Pachón\", if(CIUDAD.NAOK == 5, \"Cristian Fernando Portilla Pérez\", if(CIUDAD.NAOK == 6, \"Alejandro Éder Garcés\", if(CIUDAD.NAOK == 7, \"Dumek Turbay Paz\", if(CIUDAD.NAOK == 8, \"Jorge Enrique Acevedo Peñaloza\", if(CIUDAD.NAOK == 9, \"Marlon Monsalve Ascanio\", if(CIUDAD.NAOK == 10, \"Johana Ximena Aranda Rivera\", if(CIUDAD.NAOK == 11, \"Arturo Alexander Sánchez Escobar\", if(CIUDAD.NAOK == 12, \"Elquin Jadrian Uní Heredia\", if(CIUDAD.NAOK == 13, \"Jorge Eduardo Rojas Giraldo\", if(CIUDAD.NAOK == 14, \"Federico Andrés Gutiérrez Zuluaga\", if(CIUDAD.NAOK == 15, \"Marco Alirio Porras Pérez\", if(CIUDAD.NAOK == 16, \"Carlos Hugo Piedrahita Pérez\", if(CIUDAD.NAOK == 17, \"Hugo Fernando Kerguelén García\", if(CIUDAD.NAOK == 18, \"Germán Casagua Bonilla\", if(CIUDAD.NAOK == 19, \"Nicolás Martín Toro Muñoz\", if(CIUDAD.NAOK == 20, \"Mauricio Salazar Peláez\", if(CIUDAD.NAOK == 21, \"Juan Carlos Muñoz Bravo\", if(CIUDAD.NAOK == 22, \"Jaime Ariel Rodríguez Guzmán\", if(CIUDAD.NAOK == 23, \"Rafael Andrés Bolaños Pino\", if(CIUDAD.NAOK == 24, \"Genaro David Redondo Choles\", if(CIUDAD.NAOK == 25, \"Girley Natacha Ordóñez Bowie\", if(CIUDAD.NAOK == 26, \"Willy Alejandro Rodríguez Rojas\", if(CIUDAD.NAOK == 27, \"Carlos Pinedo Cuello\", if(CIUDAD.NAOK == 28, \"Yahir Fernando Acuña Cardales\", if(CIUDAD.NAOK == 29, \"Rafael Guillermo Acevedo Pedroza\", if(CIUDAD.NAOK == 30, \"Ernesto Miguel Orozco Durán\", if(CIUDAD.NAOK == 31, \"Alexander Baquero Sanabria\", if(CIUDAD.NAOK == 32, \"Marco Tulio Ruiz Riaño\", \"\" ))))))))))))))))))))))))))))))))}", "alcalde"],
-    "pp1":      ["PP1. En general, ¿tiene usted una opinión positiva o negativa de la gestión del alcalde {PF2ALCAL.shown}?"],
-    "pp2":      ["PP2. Pensando en las próximas elecciones, ¿usted preferiría que el próximo alcalde continúe con las obras y prioridades de la actual administración, o que establezca nuevas prioridades y realice cambios en la gestión?"],
-    "pp3":      ["PP3. ¿Cuál es su rango de edad?"],
-    "pp4":      ["PP4. ¿Con cuál género se identifica?"],
-    "pp5":      ["PP5. ¿En qué estrato socioeconómico está clasificada su vivienda?"],
-    "pp6":      ["PP6. ¿Cuál es su nivel educativo más alto completado?"],
-    "pp7":      ["PP7. ¿Cuál es su situación laboral actual?"],
+    "id":    ["ID de respuesta"],
+    "fecha": ["Fecha de envío"],
+    "municipio": ["Municipio", "PF2. ¿En qué ciudad reside actualmente?"],
+    "alcalde":   ["Alcalde"],
+    "pp1": ["PP1. En general, ¿tiene usted una opinión positiva o negativa de la gestión del alcalde {PF2ALCAL.shown}?"],
+    "pp2": ["PP2. Pensando en las próximas elecciones, ¿usted preferiría que el próximo alcalde continúe con las obras y prioridades de la actual administración, o que establezca nuevas prioridades y realice cambios en la gestión?"],
+    "pp3": ["PP3. ¿Cuál es su rango de edad?"],
+    "pp4": ["PP4. ¿Con cuál género se identifica?"],
+    "pp5": ["PP5. ¿En qué estrato socioeconómico está clasificada su vivienda?"],
+    "pp6": ["PP6. ¿Cuál es su nivel educativo más alto completado?"],
+    "pp7": ["PP7. ¿Cuál es su situación laboral actual?"],
 }
 
-def col(df, key):
+def get_col(df, key):
     for c in COLS[key]:
         if c in df.columns:
             return c
     return None
 
-# ── PÁGINA ────────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="CC916501 · Reputación de Alcaldes", page_icon="🏛️", layout="wide")
 
 st.markdown("""
@@ -44,7 +42,7 @@ html,body,[class*="css"]{font-family:'Inter',sans-serif}
 .h-tag{font-size:11px;color:#8B96A9;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}
 .h-tit{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:700;color:#fff}
 .h-sub{font-size:12px;color:#4ade80;margin-top:5px}
-.sec{font-size:12px;font-weight:700;color:#8B96A9;letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px}
+.sec{font-size:12px;font-weight:700;color:#8B96A9;letter-spacing:.1em;text-transform:uppercase;margin:20px 0 8px}
 </style>
 """, unsafe_allow_html=True)
 
@@ -56,17 +54,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── CARGA ─────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=INTERVALO, show_spinner=False)
 def cargar():
     df = pd.read_csv(SHEET_CSV)
-    # Excluir IDs
-    c_id = col(df, "id")
+    c_id = get_col(df, "id")
     if c_id:
         df[c_id] = pd.to_numeric(df[c_id], errors="coerce")
         df = df[~df[c_id].isin(EXCLUIDOS)]
-    # Solo completas
-    c_f = col(df, "fecha")
+    c_f = get_col(df, "fecha")
     if c_f:
         df = df[df[c_f].notna() & (df[c_f].astype(str).str.strip() != "N")]
     return df.reset_index(drop=True)
@@ -74,18 +69,21 @@ def cargar():
 with st.spinner("Cargando datos…"):
     try:
         df = cargar()
-        error = None
     except Exception as e:
-        df = pd.DataFrame()
-        error = str(e)
+        st.error(f"⚠️ Error: {e}")
+        st.stop()
 
-if error:
-    st.error(f"⚠️ Error al cargar datos: {error}")
-    st.stop()
+c_muni = get_col(df, "municipio")
+c_alc  = get_col(df, "alcalde")
+c_pp1  = get_col(df, "pp1")
+c_pp2  = get_col(df, "pp2")
+c_pp3  = get_col(df, "pp3")
+c_pp4  = get_col(df, "pp4")
+c_pp5  = get_col(df, "pp5")
+c_pp6  = get_col(df, "pp6")
+c_pp7  = get_col(df, "pp7")
 
-# ── KPIs ──────────────────────────────────────────────────────────────────────
-c_muni = col(df, "municipio")
-c_alc  = col(df, "alcalde")
+# ── KPIs GLOBALES ─────────────────────────────────────────────────────────────
 k1, k2, k3 = st.columns(3)
 k1.metric("Respuestas completas", len(df), help="Excluidos #9, #13, #20")
 k2.metric("Municipios", df[c_muni].nunique() if c_muni else "—")
@@ -93,138 +91,91 @@ k3.metric("Alcaldes evaluados", df[c_alc].nunique() if c_alc else "—")
 
 st.divider()
 
-# ── FILTROS ───────────────────────────────────────────────────────────────────
-st.markdown('<div class="sec">Filtros</div>', unsafe_allow_html=True)
-
-def opts(c, base=None):
-    src = base if base is not None else df
-    if not c or c not in src.columns:
-        return ["Todos"]
-    return ["Todos"] + sorted(src[c].dropna().astype(str).unique().tolist())
+# ── FILTROS ENCADENADOS ───────────────────────────────────────────────────────
+st.markdown('<div class="sec">Selecciona municipio y alcalde</div>', unsafe_allow_html=True)
 
 fa, fb = st.columns(2)
+
+munis = ["Todos"] + sorted(df[c_muni].dropna().astype(str).unique().tolist()) if c_muni else ["Todos"]
 with fa:
-    f_muni = st.selectbox("Municipio", opts(c_muni))
+    f_muni = st.selectbox("Municipio", munis)
 
-# Filtrar alcaldes según municipio seleccionado
 df_muni = df[df[c_muni].astype(str) == f_muni] if f_muni != "Todos" and c_muni else df
+alcs = ["Todos"] + sorted(df_muni[c_alc].dropna().astype(str).unique().tolist()) if c_alc else ["Todos"]
+idx_alc = 1 if len(alcs) == 2 else 0
 with fb:
-    alc_opts = opts(c_alc, base=df_muni)
-    idx = 1 if len(alc_opts) == 2 else 0
-    f_alc = st.selectbox("Alcalde evaluado", alc_opts, index=idx)
-
-st.markdown('<div class="sec">Perfil del encuestado</div>', unsafe_allow_html=True)
-g1, g2, g3, g4, g5 = st.columns(5)
-with g1: f_pp3 = st.selectbox("PP3 Edad",     opts(col(df,"pp3")))
-with g2: f_pp4 = st.selectbox("PP4 Género",   opts(col(df,"pp4")))
-with g3: f_pp5 = st.selectbox("PP5 Estrato",  opts(col(df,"pp5")))
-with g4: f_pp6 = st.selectbox("PP6 Educación",opts(col(df,"pp6")))
-with g5: f_pp7 = st.selectbox("PP7 Laboral",  opts(col(df,"pp7")))
+    f_alc = st.selectbox("Alcalde evaluado", alcs, index=idx_alc)
 
 if st.button("↺ Actualizar ahora"):
     st.cache_data.clear()
     st.rerun()
 
-# ── APLICAR FILTROS ───────────────────────────────────────────────────────────
+# Aplicar filtros
 dff = df.copy()
-def filtrar(dff, c, v):
-    if v != "Todos" and c and c in dff.columns:
-        dff = dff[dff[c].astype(str) == v]
-    return dff
+if f_muni != "Todos" and c_muni:
+    dff = dff[dff[c_muni].astype(str) == f_muni]
+if f_alc != "Todos" and c_alc:
+    dff = dff[dff[c_alc].astype(str) == f_alc]
 
-dff = filtrar(dff, c_muni,        f_muni)
-dff = filtrar(dff, c_alc,         f_alc)
-dff = filtrar(dff, col(df,"pp3"), f_pp3)
-dff = filtrar(dff, col(df,"pp4"), f_pp4)
-dff = filtrar(dff, col(df,"pp5"), f_pp5)
-dff = filtrar(dff, col(df,"pp6"), f_pp6)
-dff = filtrar(dff, col(df,"pp7"), f_pp7)
-
-st.caption(f"Mostrando **{len(dff)}** de **{len(df)}** respuestas completas")
+alcalde_titulo = f_alc if f_alc != "Todos" else (f_muni if f_muni != "Todos" else "Colombia")
+st.caption(f"Mostrando **{len(dff)}** respuestas — **{alcalde_titulo}**")
 
 st.divider()
 
-# ── RESULTADOS PP1 y PP2 ──────────────────────────────────────────────────────
-st.markdown('<div class="sec">Resultados</div>', unsafe_allow_html=True)
-
-def mostrar_resultado(df, key, titulo, pregunta):
-    c = col(df, key)
-    if not c or c not in df.columns:
-        st.warning(f"{titulo}: columna no encontrada")
+# ── FUNCIÓN PASTEL ─────────────────────────────────────────────────────────────
+def pastel(df, col_name, titulo):
+    if not col_name or col_name not in df.columns:
         return
-    serie = df[c].dropna().astype(str)
+    serie = df[col_name].dropna().astype(str)
     serie = serie[serie.str.strip().str.len() > 0]
     if len(serie) == 0:
-        st.info(f"{titulo}: sin respuestas aún")
+        st.info(f"{titulo}: sin datos")
         return
+    vc = serie.value_counts().reset_index()
+    vc.columns = ["Respuesta", "Cantidad"]
+    fig = px.pie(
+        vc, values="Cantidad", names="Respuesta",
+        title=titulo,
+        color_discrete_sequence=px.colors.qualitative.Safe,
+        hole=0.35,
+    )
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+    fig.update_layout(
+        showlegend=True,
+        legend=dict(orientation="v", x=1, y=0.5),
+        margin=dict(t=40, b=10, l=10, r=10),
+        height=320,
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-    total = len(serie)
-    vc = serie.value_counts()
-
-    st.markdown(f"**{titulo}**")
-    st.caption(pregunta)
-
-    for opcion, cnt in vc.items():
-        pct = cnt / total * 100
-        col_lbl, col_bar, col_pct = st.columns([2, 5, 1])
-        with col_lbl:
-            st.markdown(f"<p style='margin:6px 0;font-size:13px'>{opcion}</p>", unsafe_allow_html=True)
-        with col_bar:
-            st.progress(int(pct))
-        with col_pct:
-            st.markdown(f"<p style='margin:6px 0;font-size:13px;font-weight:600'>{pct:.1f}%<br/><span style='font-weight:400;color:#888'>({cnt})</span></p>", unsafe_allow_html=True)
+# ── RESULTADOS PP1 y PP2 ───────────────────────────────────────────────────────
+st.markdown('<div class="sec">Resultados principales</div>', unsafe_allow_html=True)
 
 r1, r2 = st.columns(2)
 with r1:
-    mostrar_resultado(dff, "pp1",
-        "PP1 — Opinión de la gestión del alcalde",
-        "¿Tiene usted una opinión positiva o negativa de la gestión del alcalde?")
+    pastel(dff, c_pp1, "PP1 — Opinión de la gestión")
 with r2:
-    mostrar_resultado(dff, "pp2",
-        "PP2 — Continuidad vs cambio",
-        "¿Preferiría que el próximo alcalde continúe con las obras o establezca nuevas prioridades?")
+    pastel(dff, c_pp2, "PP2 — Continuidad vs cambio")
 
 st.divider()
-st.markdown('<div class="sec">Resultados por perfil del encuestado</div>', unsafe_allow_html=True)
 
-def cruce(df, col_perfil, label_perfil, col_resultado, label_resultado):
-    cp = col(df, col_perfil)
-    cr = col(df, col_resultado)
-    if not cp or not cr or cp not in df.columns or cr not in df.columns:
-        return
-    tmp = df[[cp, cr]].dropna()
-    tmp = tmp[tmp[cp].astype(str).str.strip().str.len() > 0]
-    tmp = tmp[tmp[cr].astype(str).str.strip().str.len() > 0]
-    if len(tmp) == 0:
-        return
-    tabla = tmp.groupby([cp, cr]).size().unstack(fill_value=0)
-    tabla_pct = tabla.div(tabla.sum(axis=1), axis=0) * 100
-    st.markdown(f"**{label_perfil} × {label_resultado}**")
-    st.bar_chart(tabla_pct, height=220)
+# ── PERFIL DEL ENCUESTADO ──────────────────────────────────────────────────────
+st.markdown('<div class="sec">Perfil del encuestado</div>', unsafe_allow_html=True)
 
-st.markdown("##### PP1 — Opinión de gestión según perfil")
-c1, c2 = st.columns(2)
-with c1:
-    cruce(dff, "pp4", "Género",        "pp1", "PP1")
-    cruce(dff, "pp5", "Estrato",       "pp1", "PP1")
-with c2:
-    cruce(dff, "pp3", "Edad",          "pp1", "PP1")
-    cruce(dff, "pp6", "Educación",     "pp1", "PP1")
-cruce(dff, "pp7", "Situación laboral", "pp1", "PP1")
+p1, p2, p3 = st.columns(3)
+with p1:
+    pastel(dff, c_pp4, "PP4 — Género")
+with p2:
+    pastel(dff, c_pp3, "PP3 — Rango de edad")
+with p3:
+    pastel(dff, c_pp5, "PP5 — Estrato")
 
-st.divider()
-st.markdown("##### PP2 — Continuidad vs cambio según perfil")
-c3, c4 = st.columns(2)
-with c3:
-    cruce(dff, "pp4", "Género",        "pp2", "PP2")
-    cruce(dff, "pp5", "Estrato",       "pp2", "PP2")
-with c4:
-    cruce(dff, "pp3", "Edad",          "pp2", "PP2")
-    cruce(dff, "pp6", "Educación",     "pp2", "PP2")
-cruce(dff, "pp7", "Situación laboral", "pp2", "PP2")
+p4, p5, _ = st.columns(3)
+with p4:
+    pastel(dff, c_pp6, "PP6 — Nivel educativo")
+with p5:
+    pastel(dff, c_pp7, "PP7 — Situación laboral")
 
-# ── AUTO-REFRESCO ─────────────────────────────────────────────────────────────
+# ── AUTO-REFRESCO ──────────────────────────────────────────────────────────────
 time.sleep(INTERVALO)
 st.rerun()
-
-# ── CRUCES SOCIODEMOGRÁFICOS ──────────────────────────────────────────────────
