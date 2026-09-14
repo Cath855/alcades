@@ -3,22 +3,14 @@ CC916501 — Encuesta de Reputación de Alcaldes · Colombia 2026
 Visor en línea · CCD Área de Innovación
 """
 
-import base64
-import json
 import time
 from datetime import datetime
 
 import pandas as pd
-import requests
-import urllib3
 import streamlit as st
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ── CONFIGURACIÓN ────────────────────────────────────────────────────────────
-BASE_URL  = "https://encuestas.cnccol.com/index.php/admin/remotecontrol"
-USUARIO   = st.secrets["LS_USUARIO"]
-PASSWORD  = st.secrets["LS_PASSWORD"]
-SURVEY_ID = "916501"
+SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRLCqyVMWlyCtUQI-oR3lTeOl35UeTQq7QhbOIjiccPzytIfSMvlElS7VQV30t283UR6CeHRdLnNVel/pub?output=csv"
 EXCLUIDOS = {9, 13, 20}
 INTERVALO = 60
 
@@ -74,81 +66,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── API LimeSurvey ────────────────────────────────────────────────────────────
-def rpc(method, params):
-    r = requests.post(BASE_URL, json={"method": method, "params": params, "id": 1}, timeout=30)
-    r.raise_for_status()
-    res = r.json().get("result")
-    if isinstance(res, dict) and "status" in res:
-        raise RuntimeError(res["status"])
-    return res
 
 @st.cache_data(ttl=INTERVALO, show_spinner=False)
 def cargar_datos():
-    # Intentar con export_responses (completas directamente)
-    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    """Lee datos desde Google Sheets publicado como CSV."""
+    df = pd.read_csv(SHEET_CSV)
     
-    def rpc_raw(method, params):
-        payload = {"method": method, "params": params, "id": 1}
-        r = requests.post(BASE_URL, json=payload, headers=headers, timeout=30,
-                         verify=False)  # algunos servidores tienen SSL autofirmado
-        # Intentar parsear respuesta aunque venga con errores
-        text = r.text.strip()
-        if not text:
-            raise RuntimeError("Respuesta vacía del servidor")
-        try:
-            return r.json().get("result")
-        except Exception:
-            raise RuntimeError(f"Respuesta no JSON: {text[:200]}")
+    # Excluir IDs configurados
+    id_col = next((c for c in ["id","ID de respuesta","ID","response_id"] if c in df.columns), None)
+    if id_col:
+        df[id_col] = pd.to_numeric(df[id_col], errors="coerce")
+        df = df[~df[id_col].isin(EXCLUIDOS)]
     
-    key = rpc_raw("get_session_key", [USUARIO, PASSWORD])
-    if not key or (isinstance(key, dict) and "status" in key):
-        raise RuntimeError(f"Login fallido: {key}")
+    # Solo completas (tienen fecha de envío válida)
+    fecha_col = next((c for c in ["submitdate","Fecha de envío","fecha_envio","Date submitted"] if c in df.columns), None)
+    if fecha_col:
+        df = df[df[fecha_col].notna() & (df[fecha_col].astype(str) != "N")]
     
-    # Intentar export con diferentes parámetros
-    raw = None
-    for completeness in ["complete", "all"]:
-        try:
-            raw = rpc_raw("export_responses", [key, SURVEY_ID, "json", None, completeness, "long", "full"])
-            if raw:
-                break
-        except Exception:
-            continue
-    
-    if not raw:
-        raise RuntimeError("No se pudieron obtener respuestas")
-
-    # Decodificar: puede venir en base64 o directo
-    data = None
-    if isinstance(raw, str):
-        try:
-            data = json.loads(base64.b64decode(raw).decode("utf-8"))
-        except Exception:
-            try:
-                data = json.loads(raw)
-            except Exception:
-                raise RuntimeError(f"No se pudo decodificar la respuesta: {raw[:200]}")
-    elif isinstance(raw, dict):
-        data = raw
-    elif isinstance(raw, list):
-        data = {"responses": raw}
-
-    filas = data.get("responses") or data.get("Responses") or []
-    if not isinstance(filas, list):
-        filas = list(filas.values()) if isinstance(filas, dict) else []
-
-    if not filas:
-        raise RuntimeError("La encuesta no tiene respuestas completas aún")
-
-    df = pd.DataFrame(filas)
-    if "id" in df.columns:
-        df["id"] = pd.to_numeric(df["id"], errors="coerce")
-        df = df[~df["id"].isin(EXCLUIDOS)]
-    if "submitdate" in df.columns:
-        df = df[df["submitdate"].notna() & (df["submitdate"] != "N")]
-    try:
-        rpc_raw("release_session_key", [key])
-    except Exception:
-        pass
     return df.reset_index(drop=True)
 
 # ── CARGA ─────────────────────────────────────────────────────────────────────
