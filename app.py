@@ -458,11 +458,7 @@ def generar_pdf(df, c_pp1, c_alc, c_muni):
     pct_pos  = round(s1.str.lower().str.contains("positiv",na=False).sum()/len(s1)*100,1) if len(s1)>0 else 0
     pct_neg  = round(s1.str.lower().str.contains("negativ",na=False).sum()/len(s1)*100,1) if len(s1)>0 else 0
 
-    c_pp2 = None
-    for col in df.columns:
-        if "preferiría" in col.lower() or "pp2" in col.lower():
-            c_pp2 = col
-            break
+    c_pp2 = get_col(df, "pp2")
     s2 = df[c_pp2].dropna().astype(str) if c_pp2 else pd.Series()
     pct_cont = round(s2.str.lower().str.contains("continu",na=False).sum()/len(s2)*100,1) if len(s2)>0 else 0
     pct_camb = round(s2.str.lower().str.contains("cambi|rumbo",na=False).sum()/len(s2)*100,1) if len(s2)>0 else 0
@@ -514,9 +510,14 @@ def generar_pdf(df, c_pp1, c_alc, c_muni):
             "n":            [len(tmp[tmp[c_alc]==a]) for a in tmp[c_alc].unique()],
         })
         ranking["Alcalde"] = tmp[c_alc].unique()
-        if c_pp2 and c_pp2 in df.columns:
-            tmp2 = df[[c_alc, c_pp2]].dropna()
-            ranking["Continuidad"] = [round(pct_c(tmp2[tmp2[c_alc]==a][c_pp2]),0) if len(tmp2[tmp2[c_alc]==a])>0 else 0 for a in ranking["Alcalde"]]
+        c_pp2_pdf = get_col(df, "pp2")
+        if c_pp2_pdf and c_pp2_pdf in df.columns:
+            tmp2 = df[[c_alc, c_pp2_pdf]].dropna()
+            def pct_cont_alc(a):
+                s = tmp2[tmp2[c_alc]==a][c_pp2_pdf]
+                if len(s)==0: return 0
+                return round(s.astype(str).str.lower().str.contains("continu",na=False).sum()/len(s)*100,0)
+            ranking["Continuidad"] = [pct_cont_alc(a) for a in ranking["Alcalde"]]
         else:
             ranking["Continuidad"] = 0
 
