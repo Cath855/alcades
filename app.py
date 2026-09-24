@@ -18,6 +18,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.graphics.shapes import Drawing, Rect, String, Line
 import numpy as np
 
 
@@ -256,7 +257,7 @@ serie_pp1 = dff[c_pp1].dropna() if c_pp1 else pd.Series()
 serie_pp2 = dff[c_pp2].dropna() if c_pp2 else pd.Series()
 positivas = serie_pp1.astype(str).str.lower().str.contains("positiv", na=False).sum()
 negativas = serie_pp1.astype(str).str.lower().str.contains("negativ", na=False).sum()
-continua  = serie_pp2.astype(str).str.lower().str.contains("continu|continúe|continué", na=False).sum()
+continua  = serie_pp2.astype(str).str.lower().str.contains("contin", na=False).sum()
 cambia    = serie_pp2.astype(str).str.lower().str.contains("cambi|nueva|rumbo", na=False).sum()
 pct_pos  = f"{positivas/len(serie_pp1)*100:.1f}%" if len(serie_pp1)>0 else "—"
 pct_neg  = f"{negativas/len(serie_pp1)*100:.1f}%" if len(serie_pp1)>0 else "—"
@@ -479,8 +480,8 @@ def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni):
     pct_neg  = round(s1.str.lower().str.contains("negativ",na=False).sum()/len(s1)*100,1) if len(s1)>0 else 0
 
     s2 = df[c_pp2].dropna().astype(str) if c_pp2 and c_pp2 in df.columns else pd.Series()
-    pct_cont = round(s2.str.lower().str.contains("continu",na=False).sum()/len(s2)*100,1) if len(s2)>0 else 0
-    pct_camb = round(s2.str.lower().str.contains("cambi|rumbo",na=False).sum()/len(s2)*100,1) if len(s2)>0 else 0
+    pct_cont = round(s2.str.lower().str.contains("contin",na=False).sum()/len(s2)*100,1) if len(s2)>0 else 0
+    pct_camb = round(s2.str.lower().str.contains("cambi|rumbo|nueva",na=False).sum()/len(s2)*100,1) if len(s2)>0 else 0
 
     n_munis = df[c_muni].nunique() if c_muni else 0
     n_alcs  = df[c_alc].nunique()  if c_alc  else 0
@@ -520,7 +521,7 @@ def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni):
 
         def pct_p(s): return s.astype(str).str.lower().str.contains("positiv",na=False).sum()/len(s)*100
         def pct_n(s): return s.astype(str).str.lower().str.contains("negativ",na=False).sum()/len(s)*100
-        def pct_c(s): return s.astype(str).str.lower().str.contains("continu",na=False).sum()/len(s)*100 if c_pp2 else 0
+        def pct_c(s): return s.astype(str).str.lower().str.contains("contin",na=False).sum()/len(s)*100 if c_pp2 else 0
 
         ranking = pd.DataFrame({
             "Alcalde":      tmp.groupby(c_alc)[c_pp1].apply(lambda x: x.name if False else x.index[0]).index.tolist(),
@@ -535,7 +536,7 @@ def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni):
             def pct_cont_alc(a):
                 s = tmp2[tmp2[c_alc]==a][c_pp2_pdf]
                 if len(s)==0: return 0
-                return round(s.astype(str).str.lower().str.contains("continu",na=False).sum()/len(s)*100,0)
+                return round(s.astype(str).str.lower().str.contains("contin",na=False).sum()/len(s)*100,0)
             ranking["Continuidad"] = [pct_cont_alc(a) for a in ranking["Alcalde"]]
         else:
             ranking["Continuidad"] = 0
