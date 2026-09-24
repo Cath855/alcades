@@ -18,6 +18,11 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import numpy as np
 
 
 # ── CONFIGURACIÓN SEGURA ───────────────────────────────────────────────────────
@@ -370,6 +375,53 @@ if not hay_filtro:
         st.dataframe(resumen,use_container_width=True,hide_index=False,height=min(420,40+len(resumen)*36))
 
 # ── GENERAR PDF ───────────────────────────────────────────────────────────────
+def grafica_barras_pdf(ranking_df):
+    """Genera gráfica de barras horizontales igual al informe original."""
+    from io import BytesIO
+    n = len(ranking_df)
+    fig, ax = plt.subplots(figsize=(8.5, n * 0.42 + 1.0))
+    AZUL = "#1F4E9B"
+    ROJO = "#C0392B"
+    GRIS = "#BDBDBD"
+    labels = []
+    for _, row in ranking_df[::-1].iterrows():
+        nom = row["Alcalde"]
+        partes = nom.split()
+        corto = f"{partes[0]} {partes[-1]} ({row['Ciudad']})" if len(partes)>1 else f"{nom} ({row['Ciudad']})"
+        labels.append(corto)
+    y = np.arange(n)
+    for i, (_, row) in enumerate(ranking_df[::-1].iterrows()):
+        pos  = float(row["% Positiva"])
+        neg  = float(row["% Negativa"])
+        nsnr = max(0, 100 - pos - neg)
+        ax.barh(i, pos,  color=AZUL, height=0.6)
+        ax.barh(i, nsnr, color=GRIS, height=0.6, left=pos)
+        ax.barh(i, neg,  color=ROJO, height=0.6, left=pos+nsnr)
+        if pos > 6:
+            ax.text(pos/2, i, f"{int(pos)}%", va="center", ha="center",
+                    color="white", fontsize=7.5, fontweight="bold")
+        ax.text(102, i, f"n={int(row['n'])}", va="center", ha="left", fontsize=7, color="#555")
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels, fontsize=8)
+    ax.set_xlim(0, 116)
+    ax.axvline(x=50, color="#5A5A5A", linewidth=0.8, linestyle="--", alpha=0.5)
+    ax.set_xticks([0,25,50,75,100])
+    ax.set_xticklabels(["0%","25%","50%","75%","100%"], fontsize=8)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    legend = [mpatches.Patch(color=AZUL,label="Positiva"),
+              mpatches.Patch(color=GRIS,label="NS/NR"),
+              mpatches.Patch(color=ROJO,label="Negativa")]
+    ax.legend(handles=legend, loc="upper right", fontsize=8, framealpha=0.9)
+    ax.set_title(f"Ranking completo (alcaldes con n ≥ 10)", fontsize=10,
+                 fontweight="bold", color="#002470", pad=8)
+    plt.tight_layout()
+    buf = BytesIO()
+    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    plt.close()
+    buf.seek(0)
+    return buf
+
 def generar_pdf(df, c_pp1, c_alc, c_muni):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
@@ -538,8 +590,18 @@ def generar_pdf(df, c_pp1, c_alc, c_muni):
         story.append(t_peor)
         story.append(Spacer(1, 10))
 
-        # Ranking completo
-        story.append(Paragraph("Ranking completo", sec_style))
+        # Gráfica de barras
+        story.append(Paragraph("Ranking completo (alcaldes con n ≥ 10)", sec_style))
+        try:
+            img_buf = grafica_barras_pdf(ranking)
+            img = Image(img_buf)
+            img.drawWidth  = ancho
+            img.drawHeight = ancho * (0.42 * len(ranking) + 1.0) / 8.5
+            story.append(img)
+            story.append(Spacer(1, 10))
+        except Exception:
+            pass
+        story.append(Paragraph("Tabla detallada del ranking", sec_style))
         datos_full = [["#", "Alcalde / Municipio", "n", "Positiva", "Negativa", "Neto", "Continuidad"]]
         for i, row in ranking.iterrows():
             datos_full.append([
