@@ -422,7 +422,7 @@ def grafica_barras_pdf(ranking_df):
     buf.seek(0)
     return buf
 
-def generar_pdf(df, c_pp1, c_alc, c_muni):
+def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
                             leftMargin=2*cm, rightMargin=2*cm,
@@ -458,8 +458,7 @@ def generar_pdf(df, c_pp1, c_alc, c_muni):
     pct_pos  = round(s1.str.lower().str.contains("positiv",na=False).sum()/len(s1)*100,1) if len(s1)>0 else 0
     pct_neg  = round(s1.str.lower().str.contains("negativ",na=False).sum()/len(s1)*100,1) if len(s1)>0 else 0
 
-    c_pp2 = get_col(df, "pp2")
-    s2 = df[c_pp2].dropna().astype(str) if c_pp2 else pd.Series()
+    s2 = df[c_pp2].dropna().astype(str) if c_pp2 and c_pp2 in df.columns else pd.Series()
     pct_cont = round(s2.str.lower().str.contains("continu",na=False).sum()/len(s2)*100,1) if len(s2)>0 else 0
     pct_camb = round(s2.str.lower().str.contains("cambi|rumbo",na=False).sum()/len(s2)*100,1) if len(s2)>0 else 0
 
@@ -510,7 +509,7 @@ def generar_pdf(df, c_pp1, c_alc, c_muni):
             "n":            [len(tmp[tmp[c_alc]==a]) for a in tmp[c_alc].unique()],
         })
         ranking["Alcalde"] = tmp[c_alc].unique()
-        c_pp2_pdf = get_col(df, "pp2")
+        c_pp2_pdf = c_pp2
         if c_pp2_pdf and c_pp2_pdf in df.columns:
             tmp2 = df[[c_alc, c_pp2_pdf]].dropna()
             def pct_cont_alc(a):
@@ -657,7 +656,7 @@ if not hay_filtro and c_pp1 and c_alc:
     st.divider()
     if st.button("📄 Generar informe PDF", use_container_width=False):
         with st.spinner("Generando PDF…"):
-            pdf = generar_pdf(df, c_pp1, c_alc, c_muni)
+            pdf = generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni)
         ahora = datetime.now().strftime("%Y%m%d_%H%M")
         st.download_button(
             label="⬇ Descargar informe PDF",
