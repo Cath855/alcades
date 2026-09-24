@@ -5,11 +5,19 @@ Visor en línea · CCD Área de Innovación
 import time
 import base64
 import json
+import io
+from datetime import datetime
 import requests
 import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 
 # ── CONFIGURACIÓN SEGURA ───────────────────────────────────────────────────────
@@ -360,6 +368,241 @@ if not hay_filtro:
         resumen["% del total"] = (resumen["Respuestas"]/resumen["Respuestas"].sum()*100).round(1).astype(str)+"%"
         resumen = resumen[["Ciudad","Alcalde","Respuestas","% del total"]]
         st.dataframe(resumen,use_container_width=True,hide_index=False,height=min(420,40+len(resumen)*36))
+
+# ── GENERAR PDF ───────────────────────────────────────────────────────────────
+def generar_pdf(df, c_pp1, c_alc, c_muni):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            leftMargin=2*cm, rightMargin=2*cm,
+                            topMargin=2*cm, bottomMargin=2*cm)
+    story = []
+    ancho = A4[0] - 4*cm
+
+    # Estilos
+    estilos = getSampleStyleSheet()
+    titulo_style = ParagraphStyle("titulo", fontName="Helvetica-Bold",
+                                   fontSize=16, textColor=colors.HexColor("#002470"),
+                                   spaceAfter=4, alignment=TA_LEFT)
+    subtitulo_style = ParagraphStyle("subtitulo", fontName="Helvetica",
+                                      fontSize=10, textColor=colors.HexColor("#8B96A9"),
+                                      spaceAfter=2, alignment=TA_LEFT)
+    nota_style = ParagraphStyle("nota", fontName="Helvetica",
+                                 fontSize=8, textColor=colors.HexColor("#6b7280"),
+                                 spaceAfter=6)
+    sec_style = ParagraphStyle("sec", fontName="Helvetica-Bold",
+                                fontSize=11, textColor=colors.HexColor("#002470"),
+                                spaceBefore=12, spaceAfter=6)
+
+    # Encabezado
+    ahora = datetime.now().strftime("%d/%m/%Y %H:%M")
+    story.append(Paragraph("Percepción de gestión de alcaldes", titulo_style))
+    story.append(Paragraph(f"Avance de la encuesta · corte {ahora}", subtitulo_style))
+    story.append(HRFlowable(width=ancho, thickness=3,
+                             color=colors.HexColor("#002470"), spaceAfter=10))
+
+    # KPIs globales
+    total = len(df)
+    s1 = df[c_pp1].dropna().astype(str) if c_pp1 else pd.Series()
+    pct_pos  = round(s1.str.lower().str.contains("positiv",na=False).sum()/len(s1)*100,1) if len(s1)>0 else 0
+    pct_neg  = round(s1.str.lower().str.contains("negativ",na=False).sum()/len(s1)*100,1) if len(s1)>0 else 0
+
+    c_pp2 = None
+    for col in df.columns:
+        if "preferiría" in col.lower() or "pp2" in col.lower():
+            c_pp2 = col
+            break
+    s2 = df[c_pp2].dropna().astype(str) if c_pp2 else pd.Series()
+    pct_cont = round(s2.str.lower().str.contains("continu",na=False).sum()/len(s2)*100,1) if len(s2)>0 else 0
+    pct_camb = round(s2.str.lower().str.contains("cambi|rumbo",na=False).sum()/len(s2)*100,1) if len(s2)>0 else 0
+
+    n_munis = df[c_muni].nunique() if c_muni else 0
+    n_alcs  = df[c_alc].nunique()  if c_alc  else 0
+
+    datos_kpi = [
+        ["Encuestas válidas", "Opinión positiva", "Opinión negativa", "Prefiere continuidad", "Prefiere cambio"],
+        [str(total), f"{pct_pos}%", f"{pct_neg}%", f"{pct_cont}%", f"{pct_camb}%"],
+    ]
+    t_kpi = Table(datos_kpi, colWidths=[ancho/5]*5)
+    t_kpi.setStyle(TableStyle([
+        ("BACKGROUND",   (0,0), (-1,0), colors.HexColor("#002470")),
+        ("TEXTCOLOR",    (0,0), (-1,0), colors.white),
+        ("FONTNAME",     (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE",     (0,0), (-1,0), 9),
+        ("BACKGROUND",   (0,1), (-1,1), colors.HexColor("#EEF2FA")),
+        ("FONTNAME",     (0,1), (-1,1), "Helvetica-Bold"),
+        ("FONTSIZE",     (0,1), (-1,1), 14),
+        ("TEXTCOLOR",    (0,1), (-1,1), colors.HexColor("#002470")),
+        ("ALIGN",        (0,0), (-1,-1), "CENTER"),
+        ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+        ("ROWBACKGROUNDS",(0,0),(-1,-1),[colors.HexColor("#002470"), colors.HexColor("#EEF2FA")]),
+        ("GRID",         (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
+        ("TOPPADDING",   (0,0), (-1,-1), 8),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 8),
+    ]))
+    story.append(t_kpi)
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        f"Se han recogido {total} encuestas válidas sobre {n_alcs} alcaldes en {n_munis} municipios.",
+        nota_style))
+    story.append(Spacer(1, 4))
+
+    # Ranking
+    if c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
+        tmp = df[[c_alc, c_pp1]].dropna()
+        tmp = tmp[tmp[c_pp1].astype(str).str.strip().str.len()>0]
+
+        def pct_p(s): return s.astype(str).str.lower().str.contains("positiv",na=False).sum()/len(s)*100
+        def pct_n(s): return s.astype(str).str.lower().str.contains("negativ",na=False).sum()/len(s)*100
+        def pct_c(s): return s.astype(str).str.lower().str.contains("continu",na=False).sum()/len(s)*100 if c_pp2 else 0
+
+        ranking = pd.DataFrame({
+            "Alcalde":      tmp.groupby(c_alc)[c_pp1].apply(lambda x: x.name if False else x.index[0]).index.tolist(),
+            "% Positiva":   [round(pct_p(tmp[tmp[c_alc]==a][c_pp1]),0) for a in tmp[c_alc].unique()],
+            "% Negativa":   [round(pct_n(tmp[tmp[c_alc]==a][c_pp1]),0) for a in tmp[c_alc].unique()],
+            "n":            [len(tmp[tmp[c_alc]==a]) for a in tmp[c_alc].unique()],
+        })
+        ranking["Alcalde"] = tmp[c_alc].unique()
+        if c_pp2 and c_pp2 in df.columns:
+            tmp2 = df[[c_alc, c_pp2]].dropna()
+            ranking["Continuidad"] = [round(pct_c(tmp2[tmp2[c_alc]==a][c_pp2]),0) if len(tmp2[tmp2[c_alc]==a])>0 else 0 for a in ranking["Alcalde"]]
+        else:
+            ranking["Continuidad"] = 0
+
+        ciudad_por_alcalde = df.groupby(c_alc)[c_muni].agg(lambda x: x.value_counts().index[0] if len(x)>0 else "—")
+        ranking["Ciudad"] = ranking["Alcalde"].map(ciudad_por_alcalde)
+        ranking["Neto"] = ranking["% Positiva"] - ranking["% Negativa"]
+        ranking = ranking[ranking["n"]>=10].sort_values("% Positiva", ascending=False).reset_index(drop=True)
+        ranking.index = ranking.index + 1
+
+        # Top 5
+        story.append(Paragraph("Top 5 — mejor evaluados", sec_style))
+        top5 = ranking.head(5)
+        datos_top = [["#", "Alcalde / Municipio", "n", "Positiva", "Negativa", "Neto", "Continuidad"]]
+        for i, row in top5.iterrows():
+            datos_top.append([
+                str(i),
+                row["Alcalde"] + "\n" + row["Ciudad"],
+                str(int(row['n'])),
+                f"{int(row['% Positiva'])}%",
+                f"{int(row['% Negativa'])}%",
+                f"{'+' if row['Neto']>=0 else ''}{int(row['Neto'])}",
+                f"{int(row['Continuidad'])}%",
+            ])
+        t_top = Table(datos_top, colWidths=[1*cm, 6*cm, 1*cm, 2*cm, 2*cm, 2*cm, 2*cm])
+        t_top.setStyle(TableStyle([
+            ("BACKGROUND",  (0,0), (-1,0), colors.HexColor("#002470")),
+            ("TEXTCOLOR",   (0,0), (-1,0), colors.white),
+            ("FONTNAME",    (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE",    (0,0), (-1,-1), 8),
+            ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white, colors.HexColor("#F0FDF4")]),
+            ("GRID",        (0,0), (-1,-1), 0.3, colors.HexColor("#CBD5E1")),
+            ("ALIGN",       (2,0), (-1,-1), "CENTER"),
+            ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",  (0,0), (-1,-1), 5),
+            ("BOTTOMPADDING",(0,0), (-1,-1), 5),
+            ("TEXTCOLOR",   (3,1), (3,-1), colors.HexColor("#15803d")),
+            ("FONTNAME",    (3,1), (3,-1), "Helvetica-Bold"),
+        ]))
+        story.append(t_top)
+        story.append(Spacer(1, 10))
+
+        # Peor 5
+        story.append(Paragraph("Top 5 — peor evaluados", sec_style))
+        peor5 = ranking.tail(5).sort_values("% Positiva", ascending=True)
+        datos_peor = [["#", "Alcalde / Municipio", "n", "Positiva", "Negativa", "Neto", "Continuidad"]]
+        for i, row in peor5.iterrows():
+            datos_peor.append([
+                str(i),
+                row["Alcalde"] + "\n" + row["Ciudad"],
+                str(int(row['n'])),
+                f"{int(row['% Positiva'])}%",
+                f"{int(row['% Negativa'])}%",
+                f"{'+' if row['Neto']>=0 else ''}{int(row['Neto'])}",
+                f"{int(row['Continuidad'])}%",
+            ])
+        t_peor = Table(datos_peor, colWidths=[1*cm, 6*cm, 1*cm, 2*cm, 2*cm, 2*cm, 2*cm])
+        t_peor.setStyle(TableStyle([
+            ("BACKGROUND",  (0,0), (-1,0), colors.HexColor("#002470")),
+            ("TEXTCOLOR",   (0,0), (-1,0), colors.white),
+            ("FONTNAME",    (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE",    (0,0), (-1,-1), 8),
+            ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white, colors.HexColor("#FFF7F7")]),
+            ("GRID",        (0,0), (-1,-1), 0.3, colors.HexColor("#CBD5E1")),
+            ("ALIGN",       (2,0), (-1,-1), "CENTER"),
+            ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",  (0,0), (-1,-1), 5),
+            ("BOTTOMPADDING",(0,0), (-1,-1), 5),
+            ("TEXTCOLOR",   (3,1), (3,-1), colors.HexColor("#CE1126")),
+            ("FONTNAME",    (3,1), (3,-1), "Helvetica-Bold"),
+        ]))
+        story.append(t_peor)
+        story.append(Spacer(1, 10))
+
+        # Ranking completo
+        story.append(Paragraph("Ranking completo", sec_style))
+        datos_full = [["#", "Alcalde / Municipio", "n", "Positiva", "Negativa", "Neto", "Continuidad"]]
+        for i, row in ranking.iterrows():
+            datos_full.append([
+                str(i),
+                row["Alcalde"] + " (" + row["Ciudad"] + ")",
+                str(int(row['n'])),
+                f"{int(row['% Positiva'])}%",
+                f"{int(row['% Negativa'])}%",
+                f"{'+' if row['Neto']>=0 else ''}{int(row['Neto'])}",
+                f"{int(row['Continuidad'])}%",
+            ])
+        t_full = Table(datos_full, colWidths=[1*cm, 7*cm, 1*cm, 2*cm, 2*cm, 1.5*cm, 2*cm])
+        row_colors = []
+        for i in range(1, len(datos_full)):
+            pct = ranking.iloc[i-1]["% Positiva"]
+            if pct >= 70:
+                row_colors.append(colors.HexColor("#F0FDF4"))
+            elif pct >= 50:
+                row_colors.append(colors.white)
+            else:
+                row_colors.append(colors.HexColor("#FFF7F7"))
+        t_full.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,0), colors.HexColor("#002470")),
+            ("TEXTCOLOR",     (0,0), (-1,0), colors.white),
+            ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE",      (0,0), (-1,-1), 8),
+            ("GRID",          (0,0), (-1,-1), 0.3, colors.HexColor("#CBD5E1")),
+            ("ALIGN",         (2,0), (-1,-1), "CENTER"),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",    (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ]))
+        story.append(t_full)
+        story.append(Spacer(1, 6))
+
+    # Nota metodológica
+    story.append(HRFlowable(width=ancho, thickness=0.5,
+                             color=colors.HexColor("#CBD5E1"), spaceAfter=6))
+    story.append(Paragraph(
+        "Positiva/Negativa: PP1, opinión sobre la gestión del alcalde. "
+        "Neto = % positiva − % negativa. "
+        "Continuidad: PP2, % que prefiere que el próximo alcalde continúe con las obras y prioridades actuales. "
+        "Encuesta en línea autoadministrada (WhatsApp/redes), no probabilística.",
+        nota_style))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+# Botón descarga PDF — solo sin filtros
+if not hay_filtro and c_pp1 and c_alc:
+    st.divider()
+    if st.button("📄 Generar informe PDF", use_container_width=False):
+        with st.spinner("Generando PDF…"):
+            pdf = generar_pdf(df, c_pp1, c_alc, c_muni)
+        ahora = datetime.now().strftime("%Y%m%d_%H%M")
+        st.download_button(
+            label="⬇ Descargar informe PDF",
+            data=pdf,
+            file_name=f"Informe_Alcaldes_{ahora}.pdf",
+            mime="application/pdf",
+            use_container_width=False,
+        )
 
 # ── AUTO-REFRESCO ──────────────────────────────────────────────────────────────
 time.sleep(INTERVALO)
