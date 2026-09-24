@@ -18,10 +18,6 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
 
 
@@ -375,52 +371,76 @@ if not hay_filtro:
         st.dataframe(resumen,use_container_width=True,hide_index=False,height=min(420,40+len(resumen)*36))
 
 # ── GENERAR PDF ───────────────────────────────────────────────────────────────
-def grafica_barras_pdf(ranking_df):
-    """Genera gráfica de barras horizontales igual al informe original."""
-    from io import BytesIO
+def grafica_barras_pdf(ranking_df, ancho_pts):
+    """Gráfica de barras apiladas dibujada con reportlab (sin matplotlib)."""
+    AZUL = colors.HexColor("#1F4E9B")
+    ROJO = colors.HexColor("#C0392B")
+    GRIS = colors.HexColor("#BDBDBD")
+    TXT  = colors.HexColor("#333333")
+
     n = len(ranking_df)
-    fig, ax = plt.subplots(figsize=(8.5, n * 0.42 + 1.0))
-    AZUL = "#1F4E9B"
-    ROJO = "#C0392B"
-    GRIS = "#BDBDBD"
-    labels = []
-    for _, row in ranking_df[::-1].iterrows():
-        nom = row["Alcalde"]
-        partes = nom.split()
-        corto = f"{partes[0]} {partes[-1]} ({row['Ciudad']})" if len(partes)>1 else f"{nom} ({row['Ciudad']})"
-        labels.append(corto)
-    y = np.arange(n)
+    fila_h    = 15
+    margen_iz = 150   # espacio para nombres
+    margen_de = 38    # espacio para n=
+    top       = 26    # leyenda
+    bottom    = 18    # eje x
+    barra_w   = ancho_pts - margen_iz - margen_de
+    alto      = n * fila_h + top + bottom
+
+    d = Drawing(ancho_pts, alto)
+
+    # Leyenda
+    lx = margen_iz
+    for color, txt in [(AZUL,"Positiva"), (GRIS,"NS/NR"), (ROJO,"Negativa")]:
+        d.add(Rect(lx, alto-14, 9, 9, fillColor=color, strokeColor=None))
+        d.add(String(lx+13, alto-12, txt, fontName="Helvetica", fontSize=7, fillColor=TXT))
+        lx += 60
+
+    # Línea 50%
+    x50 = margen_iz + barra_w*0.5
+    d.add(Line(x50, bottom-3, x50, alto-top+3,
+               strokeColor=colors.HexColor("#AAAAAA"), strokeWidth=0.6, strokeDashArray=[2,2]))
+
+    # Eje x
+    for p in [0,25,50,75,100]:
+        xp = margen_iz + barra_w*(p/100)
+        d.add(String(xp, bottom-12, f"{p}%", fontName="Helvetica",
+                     fontSize=6.5, fillColor=TXT, textAnchor="middle"))
+
+    # Barras (de abajo hacia arriba = peor a mejor)
     for i, (_, row) in enumerate(ranking_df[::-1].iterrows()):
+        y = bottom + i*fila_h
         pos  = float(row["% Positiva"])
         neg  = float(row["% Negativa"])
-        nsnr = max(0, 100 - pos - neg)
-        ax.barh(i, pos,  color=AZUL, height=0.6)
-        ax.barh(i, nsnr, color=GRIS, height=0.6, left=pos)
-        ax.barh(i, neg,  color=ROJO, height=0.6, left=pos+nsnr)
-        if pos > 6:
-            ax.text(pos/2, i, f"{int(pos)}%", va="center", ha="center",
-                    color="white", fontsize=7.5, fontweight="bold")
-        ax.text(102, i, f"n={int(row['n'])}", va="center", ha="left", fontsize=7, color="#555")
-    ax.set_yticks(y)
-    ax.set_yticklabels(labels, fontsize=8)
-    ax.set_xlim(0, 116)
-    ax.axvline(x=50, color="#5A5A5A", linewidth=0.8, linestyle="--", alpha=0.5)
-    ax.set_xticks([0,25,50,75,100])
-    ax.set_xticklabels(["0%","25%","50%","75%","100%"], fontsize=8)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    legend = [mpatches.Patch(color=AZUL,label="Positiva"),
-              mpatches.Patch(color=GRIS,label="NS/NR"),
-              mpatches.Patch(color=ROJO,label="Negativa")]
-    ax.legend(handles=legend, loc="upper right", fontsize=8, framealpha=0.9)
-    ax.set_title(f"Ranking completo (alcaldes con n ≥ 10)", fontsize=10,
-                 fontweight="bold", color="#002470", pad=8)
-    plt.tight_layout()
-    buf = BytesIO()
-    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-    plt.close()
-    buf.seek(0)
-    return buf
+        nsnr = max(0.0, 100.0 - pos - neg)
+        bh = fila_h * 0.62
+
+        # Nombre corto
+        partes = str(row["Alcalde"]).split()
+        nom = f"{partes[0]} {partes[-1]}" if len(partes) > 1 else str(row["Alcalde"])
+        etiqueta = f"{nom} ({row['Ciudad']})"
+        if len(etiqueta) > 34:
+            etiqueta = etiqueta[:33] + "…"
+        d.add(String(margen_iz-5, y+3, etiqueta, fontName="Helvetica",
+                     fontSize=6.8, fillColor=TXT, textAnchor="end"))
+
+        x = margen_iz
+        for valor, color in [(pos,AZUL), (nsnr,GRIS), (neg,ROJO)]:
+            w = barra_w * (valor/100.0)
+            if w > 0:
+                d.add(Rect(x, y, w, bh, fillColor=color, strokeColor=None))
+            x += w
+
+        # % positiva dentro de la barra
+        if pos > 7:
+            d.add(String(margen_iz + barra_w*(pos/200), y+3, f"{int(pos)}%",
+                         fontName="Helvetica-Bold", fontSize=6.3,
+                         fillColor=colors.white, textAnchor="middle"))
+        # n= al final
+        d.add(String(margen_iz + barra_w + 4, y+3, f"n={int(row['n'])}",
+                     fontName="Helvetica", fontSize=6.3, fillColor=TXT))
+
+    return d
 
 def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni):
     buffer = io.BytesIO()
@@ -592,15 +612,8 @@ def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni):
 
         # Gráfica de barras
         story.append(Paragraph("Ranking completo (alcaldes con n ≥ 10)", sec_style))
-        try:
-            img_buf = grafica_barras_pdf(ranking)
-            img = Image(img_buf)
-            img.drawWidth  = ancho
-            img.drawHeight = ancho * (0.42 * len(ranking) + 1.0) / 8.5
-            story.append(img)
-            story.append(Spacer(1, 10))
-        except Exception:
-            pass
+        story.append(grafica_barras_pdf(ranking, ancho))
+        story.append(Spacer(1, 10))
         story.append(Paragraph("Tabla detallada del ranking", sec_style))
         datos_full = [["#", "Alcalde / Municipio", "n", "Positiva", "Negativa", "Neto", "Continuidad"]]
         for i, row in ranking.iterrows():
