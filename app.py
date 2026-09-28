@@ -565,10 +565,14 @@ with tab1:
         f_muni = st.selectbox("Municipio", munis)
 
     df_muni = df[df[c_muni].astype(str) == f_muni] if f_muni != "Todos" and c_muni else df
-    alcs = ["Todos"] + sorted(df_muni[c_alc].dropna().astype(str).unique().tolist()) if c_alc else ["Todos"]
-    idx_alc = 1 if len(alcs) == 2 else 0
+    alcs_disp = sorted(df_muni[c_alc].dropna().astype(str).unique().tolist()) if c_alc else []
     with fb:
-        f_alc = st.selectbox("Alcalde evaluado", alcs, index=idx_alc)
+        if f_muni != "Todos" and len(alcs_disp) >= 1:
+            f_alc = st.selectbox("Alcalde evaluado", alcs_disp, index=0,
+                                 key=f"gen_alcalde_{f_muni}")
+        else:
+            f_alc = st.selectbox("Alcalde evaluado", ["Todos"] + alcs_disp, index=0,
+                                 key="gen_alcalde_todos")
 
     with fc:
         st.markdown("<br/>", unsafe_allow_html=True)
@@ -583,7 +587,7 @@ with tab1:
     if f_alc != "Todos" and c_alc:
         dff = dff[dff[c_alc].astype(str) == f_alc]
 
-    hay_filtro = f_muni != "Todos" or f_alc != "Todos"
+    hay_filtro = f_muni != "Todos"
 
     st.divider()
 
@@ -721,24 +725,27 @@ with tab2:
         dfl_ciudad = dfl[dfl[c_muni].astype(str) == f_ciudad_L] if f_ciudad_L != "Todas" else dfl
         alcs_L = sorted(dfl_ciudad[c_alc].dropna().astype(str).unique().tolist()) if c_alc else []
         with fl2:
-            opciones_alc_L = ["Todos"] + alcs_L
-            idx_L = 1 if len(opciones_alc_L) == 2 else 0
-            f_alc_L = st.selectbox("Alcalde", opciones_alc_L, index=idx_L, key="lem_alcalde")
+            if f_ciudad_L != "Todas" and len(alcs_L) >= 1:
+                # Ciudad elegida → mostrar directamente su alcalde, sin opción "Todos"
+                f_alc_L = st.selectbox("Alcalde", alcs_L, index=0,
+                                       key=f"lem_alcalde_{f_ciudad_L}")
+            else:
+                f_alc_L = st.selectbox("Alcalde", ["Todos"] + alcs_L, index=0,
+                                       key="lem_alcalde_todas")
         with fl3:
             st.markdown("<br/>", unsafe_allow_html=True)
-            if st.button("↺ Limpiar filtros", use_container_width=True, key="lem_limpiar"):
+            if st.button("↺ Ver las 8 ciudades", use_container_width=True, key="lem_limpiar"):
                 st.session_state["lem_ciudad"] = "Todas"
-                st.session_state["lem_alcalde"] = "Todos"
                 st.rerun()
 
         # Aplicar filtros de la pestaña
         dfl_full = dfl.copy()          # las 8 ciudades sin filtrar (para el ranking)
         if f_ciudad_L != "Todas":
             dfl = dfl[dfl[c_muni].astype(str) == f_ciudad_L]
-        if f_alc_L != "Todos" and c_alc:
+        if f_alc_L and f_alc_L != "Todos" and c_alc:
             dfl = dfl[dfl[c_alc].astype(str) == f_alc_L]
 
-        hay_filtro_L = f_ciudad_L != "Todas" or f_alc_L != "Todos"
+        hay_filtro_L = f_ciudad_L != "Todas"
 
         if hay_filtro_L:
             st.caption(f"Mostrando **{len(dfl)}** de **{len(dfl_full)}** respuestas · "
