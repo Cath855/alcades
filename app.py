@@ -201,76 +201,17 @@ c_pp5  = get_col(df, "pp5")
 c_pp6  = get_col(df, "pp6")
 c_pp7  = get_col(df, "pp7")
 
-# ── KPIs GLOBALES ─────────────────────────────────────────────────────────────
-k1, k2, k3 = st.columns(3)
-k1.metric("Respuestas completas", len(df), help="Excluidos #9, #13, #20")
-k2.metric("Municipios", df[c_muni].nunique() if c_muni else "—")
-k3.metric("Alcaldes evaluados", df[c_alc].nunique() if c_alc else "—")
 
-st.divider()
+# ── CIUDADES INFORME DR. LEMOINE ──────────────────────────────────────────────
+CIUDADES_LEMOINE = ["Bogotá D.C.", "Bogotá", "Medellín", "Cartagena", "Cali",
+                    "Bucaramanga", "Santa Marta", "Barranquilla", "Montería"]
 
-# ── FILTROS ───────────────────────────────────────────────────────────────────
-st.markdown('<div class="sec">Selecciona municipio y alcalde</div>', unsafe_allow_html=True)
-fa, fb, fc = st.columns([2, 2, 1])
-
-munis = ["Todos"] + sorted(df[c_muni].dropna().astype(str).unique().tolist()) if c_muni else ["Todos"]
-with fa:
-    f_muni = st.selectbox("Municipio", munis)
-
-df_muni = df[df[c_muni].astype(str) == f_muni] if f_muni != "Todos" and c_muni else df
-alcs = ["Todos"] + sorted(df_muni[c_alc].dropna().astype(str).unique().tolist()) if c_alc else ["Todos"]
-idx_alc = 1 if len(alcs) == 2 else 0
-with fb:
-    f_alc = st.selectbox("Alcalde evaluado", alcs, index=idx_alc)
-
-with fc:
-    st.markdown("<br/>", unsafe_allow_html=True)
-    if st.button("↺ Actualizar", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-
-# ── APLICAR FILTROS ───────────────────────────────────────────────────────────
-dff = df.copy()
-if f_muni != "Todos" and c_muni:
-    dff = dff[dff[c_muni].astype(str) == f_muni]
-if f_alc != "Todos" and c_alc:
-    dff = dff[dff[c_alc].astype(str) == f_alc]
-
-hay_filtro = f_muni != "Todos" or f_alc != "Todos"
-
-st.divider()
-
-# ── FICHA ─────────────────────────────────────────────────────────────────────
-nombre_alcalde = f_alc if f_alc != "Todos" else "Todos los alcaldes"
-nombre_ciudad  = f_muni if f_muni != "Todos" else "Colombia"
-
-st.markdown(f"""
-<div class="ficha">
-  <div class="ficha-ciudad">📍 {nombre_ciudad}</div>
-  <div class="ficha-alcalde">{nombre_alcalde}</div>
-  <div class="ficha-n">● {len(dff)} respuestas completas analizadas</div>
-</div>
-""", unsafe_allow_html=True)
-
-# ── KPIs FICHA ────────────────────────────────────────────────────────────────
-serie_pp1 = dff[c_pp1].dropna() if c_pp1 else pd.Series()
-serie_pp2 = dff[c_pp2].dropna() if c_pp2 else pd.Series()
-positivas = serie_pp1.astype(str).str.lower().str.contains("positiv", na=False).sum()
-negativas = serie_pp1.astype(str).str.lower().str.contains("negativ", na=False).sum()
-continua  = serie_pp2.astype(str).str.lower().str.contains("contin", na=False).sum()
-cambia    = serie_pp2.astype(str).str.lower().str.contains("cambi|nueva|rumbo", na=False).sum()
-pct_pos  = f"{positivas/len(serie_pp1)*100:.1f}%" if len(serie_pp1)>0 else "—"
-pct_neg  = f"{negativas/len(serie_pp1)*100:.1f}%" if len(serie_pp1)>0 else "—"
-pct_cont = f"{continua/len(serie_pp2)*100:.1f}%"  if len(serie_pp2)>0 else "—"
-pct_camb = f"{cambia/len(serie_pp2)*100:.1f}%"    if len(serie_pp2)>0 else "—"
-
-k1,k2,k3,k4 = st.columns(4)
-with k1: st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#1a6e35">{pct_pos}</div><div class="kpi-l">Opinión positiva</div></div>',unsafe_allow_html=True)
-with k2: st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#CE1126">{pct_neg}</div><div class="kpi-l">Opinión negativa</div></div>',unsafe_allow_html=True)
-with k3: st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#003DA5">{pct_cont}</div><div class="kpi-l">Quiere continuidad</div></div>',unsafe_allow_html=True)
-with k4: st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#7C3AED">{pct_camb}</div><div class="kpi-l">Quiere cambio</div></div>',unsafe_allow_html=True)
-
-st.divider()
+def filtrar_lemoine(df, c_muni):
+    if not c_muni or c_muni not in df.columns:
+        return df.iloc[0:0]
+    serie = df[c_muni].astype(str).str.strip()
+    objetivo = [c.lower() for c in CIUDADES_LEMOINE]
+    return df[serie.str.lower().isin(objetivo)]
 
 # ── FUNCIÓN BARRAS ────────────────────────────────────────────────────────────
 def barras(df, col_name, titulo, colores=None, altura=320):
@@ -305,71 +246,6 @@ def barras(df, col_name, titulo, colores=None, altura=320):
         height=altura, plot_bgcolor="white", paper_bgcolor="white", bargap=0.3,
     )
     st.plotly_chart(fig, use_container_width=True)
-
-# ── PP1 Y PP2 — SIEMPRE ───────────────────────────────────────────────────────
-st.markdown('<div class="sec">Resultados principales</div>', unsafe_allow_html=True)
-r1, r2 = st.columns(2)
-with r1:
-    barras(dff, c_pp1, "PP1 — Opinión de la gestión del alcalde", COLORES_PP1, altura=280)
-with r2:
-    barras(dff, c_pp2, "PP2 — Continuidad vs cambio", altura=280)
-
-st.divider()
-
-# ── PERFIL — SIEMPRE ──────────────────────────────────────────────────────────
-st.markdown('<div class="sec">Perfil del encuestado</div>', unsafe_allow_html=True)
-p1,p2,p3 = st.columns(3)
-with p1: barras(dff, c_pp4, "PP4 — Género")
-with p2: barras(dff, c_pp3, "PP3 — Rango de edad")
-with p3: barras(dff, c_pp5, "PP5 — Estrato")
-p4,p5,_ = st.columns(3)
-with p4: barras(dff, c_pp6, "PP6 — Nivel educativo")
-with p5: barras(dff, c_pp7, "PP7 — Situación laboral")
-
-# ── RANKING Y TABLA — SOLO SIN FILTRO ────────────────────────────────────────
-if not hay_filtro:
-    st.divider()
-    st.markdown('<div class="sec">Ranking nacional — PP1 Opinión de gestión</div>', unsafe_allow_html=True)
-    if c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
-        tmp = df[[c_alc,c_pp1]].dropna()
-        tmp = tmp[tmp[c_pp1].astype(str).str.strip().str.len()>0]
-        def pct_positiva(serie):
-            return serie.astype(str).str.lower().str.contains("positiv",na=False).sum()/len(serie)*100
-        ranking = tmp.groupby(c_alc)[c_pp1].apply(pct_positiva).reset_index()
-        ranking.columns = ["Alcalde","% Positiva"]
-        ranking["% Positiva"] = ranking["% Positiva"].round(1)
-        ranking["n"] = tmp.groupby(c_alc)[c_pp1].count().values
-        ranking = ranking[ranking["n"]>=20]
-        ranking = ranking.sort_values("% Positiva",ascending=False).reset_index(drop=True)
-        ciudad_por_alcalde = df.groupby(c_alc)[c_muni].agg(lambda x: x.value_counts().index[0] if len(x)>0 else "—")
-        top3  = ranking.head(3).copy()
-        peor3 = ranking.tail(3).sort_values("% Positiva",ascending=True).copy()
-        st.caption("⚠️ Ranking basado en % de opinión positiva (PP1). Solo alcaldes con mínimo 20 respuestas.")
-        ra,rb = st.columns(2)
-        with ra:
-            st.markdown("🏆 **Mejor calificados**")
-            for i,row in top3.iterrows():
-                medal=["🥇","🥈","🥉"][i]
-                ciudad=ciudad_por_alcalde.get(row["Alcalde"],"—")
-                st.markdown(f'<div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;padding:10px 14px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:600">{medal} {row["Alcalde"]}</span><span style="font-size:20px;font-weight:700;color:#15803d">{row["% Positiva"]}%</span></div><div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {ciudad} · {int(row["n"])} respuestas</div></div>',unsafe_allow_html=True)
-        with rb:
-            st.markdown("⚠️ **Peor calificados**")
-            for j,(_,row) in enumerate(peor3.iterrows()):
-                medal=["🔴","🟠","🟡"][j]
-                ciudad=ciudad_por_alcalde.get(row["Alcalde"],"—")
-                st.markdown(f'<div style="background:#fff7f7;border-left:4px solid #ef4444;border-radius:6px;padding:10px 14px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:600">{medal} {row["Alcalde"]}</span><span style="font-size:20px;font-weight:700;color:#CE1126">{row["% Positiva"]}%</span></div><div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {ciudad} · {int(row["n"])} respuestas</div></div>',unsafe_allow_html=True)
-    st.divider()
-    st.markdown('<div class="sec">Respuestas por ciudad</div>', unsafe_allow_html=True)
-    if c_muni and c_alc and c_muni in df.columns:
-        resumen = df.groupby(c_muni).size().reset_index(name="Respuestas")
-        resumen.columns = ["Ciudad","Respuestas"]
-        alc_ciudad = df.groupby(c_muni)[c_alc].agg(lambda x: x.value_counts().index[0] if len(x)>0 else "—").reset_index()
-        alc_ciudad.columns = ["Ciudad","Alcalde"]
-        resumen = resumen.merge(alc_ciudad,on="Ciudad").sort_values("Respuestas",ascending=False).reset_index(drop=True)
-        resumen.index = resumen.index+1
-        resumen["% del total"] = (resumen["Respuestas"]/resumen["Respuestas"].sum()*100).round(1).astype(str)+"%"
-        resumen = resumen[["Ciudad","Alcalde","Respuestas","% del total"]]
-        st.dataframe(resumen,use_container_width=True,hide_index=False,height=min(420,40+len(resumen)*36))
 
 # ── GENERAR PDF ───────────────────────────────────────────────────────────────
 def grafica_barras_pdf(ranking_df, ancho_pts):
@@ -443,7 +319,7 @@ def grafica_barras_pdf(ranking_df, ancho_pts):
 
     return d
 
-def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni):
+def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni, titulo="Percepción de gestión de alcaldes", subtitulo_extra=None, min_n=10):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
                             leftMargin=2*cm, rightMargin=2*cm,
@@ -468,8 +344,11 @@ def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni):
 
     # Encabezado
     ahora = datetime.now().strftime("%d/%m/%Y %H:%M")
-    story.append(Paragraph("Percepción de gestión de alcaldes", titulo_style))
-    story.append(Paragraph(f"Avance de la encuesta · corte {ahora}", subtitulo_style))
+    story.append(Paragraph(titulo, titulo_style))
+    linea_sub = f"Avance de la encuesta · corte {ahora}"
+    if subtitulo_extra:
+        linea_sub = subtitulo_extra + " · corte " + ahora
+    story.append(Paragraph(linea_sub, subtitulo_style))
     story.append(HRFlowable(width=ancho, thickness=3,
                              color=colors.HexColor("#002470"), spaceAfter=10))
 
@@ -544,7 +423,7 @@ def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni):
         ciudad_por_alcalde = df.groupby(c_alc)[c_muni].agg(lambda x: x.value_counts().index[0] if len(x)>0 else "—")
         ranking["Ciudad"] = ranking["Alcalde"].map(ciudad_por_alcalde)
         ranking["Neto"] = ranking["% Positiva"] - ranking["% Negativa"]
-        ranking = ranking[ranking["n"]>=10].sort_values("% Positiva", ascending=False).reset_index(drop=True)
+        ranking = ranking[ranking["n"]>=min_n].sort_values("% Positiva", ascending=False).reset_index(drop=True)
         ranking.index = ranking.index + 1
 
         # Top 5
@@ -612,7 +491,7 @@ def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni):
         story.append(Spacer(1, 10))
 
         # Gráfica de barras
-        story.append(Paragraph("Ranking completo (alcaldes con n ≥ 10)", sec_style))
+        story.append(Paragraph(f"Ranking completo (alcaldes con n ≥ {min_n})", sec_style))
         story.append(grafica_barras_pdf(ranking, ancho))
         story.append(Spacer(1, 10))
         story.append(Paragraph("Tabla detallada del ranking", sec_style))
@@ -665,20 +544,289 @@ def generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni):
     buffer.seek(0)
     return buffer
 
-# Botón descarga PDF — solo sin filtros
-if not hay_filtro and c_pp1 and c_alc:
+# ══ PESTAÑAS ══════════════════════════════════════════════════════════════
+tab1, tab2 = st.tabs(["📊 Visor general", "📋 Datos Dr. Lemoine"])
+
+with tab1:
+    # ── KPIs GLOBALES ─────────────────────────────────────────────────────────────
+    k1, k2, k3 = st.columns(3)
+    k1.metric("Respuestas completas", len(df), help="Excluidos #9, #13, #20")
+    k2.metric("Municipios", df[c_muni].nunique() if c_muni else "—")
+    k3.metric("Alcaldes evaluados", df[c_alc].nunique() if c_alc else "—")
+
     st.divider()
-    if st.button("📄 Generar informe PDF", use_container_width=False):
-        with st.spinner("Generando PDF…"):
-            pdf = generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni)
-        ahora = datetime.now().strftime("%Y%m%d_%H%M")
-        st.download_button(
-            label="⬇ Descargar informe PDF",
-            data=pdf,
-            file_name=f"Informe_Alcaldes_{ahora}.pdf",
-            mime="application/pdf",
-            use_container_width=False,
-        )
+
+    # ── FILTROS ───────────────────────────────────────────────────────────────────
+    st.markdown('<div class="sec">Selecciona municipio y alcalde</div>', unsafe_allow_html=True)
+    fa, fb, fc = st.columns([2, 2, 1])
+
+    munis = ["Todos"] + sorted(df[c_muni].dropna().astype(str).unique().tolist()) if c_muni else ["Todos"]
+    with fa:
+        f_muni = st.selectbox("Municipio", munis)
+
+    df_muni = df[df[c_muni].astype(str) == f_muni] if f_muni != "Todos" and c_muni else df
+    alcs = ["Todos"] + sorted(df_muni[c_alc].dropna().astype(str).unique().tolist()) if c_alc else ["Todos"]
+    idx_alc = 1 if len(alcs) == 2 else 0
+    with fb:
+        f_alc = st.selectbox("Alcalde evaluado", alcs, index=idx_alc)
+
+    with fc:
+        st.markdown("<br/>", unsafe_allow_html=True)
+        if st.button("↺ Actualizar", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+
+    # ── APLICAR FILTROS ───────────────────────────────────────────────────────────
+    dff = df.copy()
+    if f_muni != "Todos" and c_muni:
+        dff = dff[dff[c_muni].astype(str) == f_muni]
+    if f_alc != "Todos" and c_alc:
+        dff = dff[dff[c_alc].astype(str) == f_alc]
+
+    hay_filtro = f_muni != "Todos" or f_alc != "Todos"
+
+    st.divider()
+
+    # ── FICHA ─────────────────────────────────────────────────────────────────────
+    nombre_alcalde = f_alc if f_alc != "Todos" else "Todos los alcaldes"
+    nombre_ciudad  = f_muni if f_muni != "Todos" else "Colombia"
+
+    st.markdown(f"""
+    <div class="ficha">
+      <div class="ficha-ciudad">📍 {nombre_ciudad}</div>
+      <div class="ficha-alcalde">{nombre_alcalde}</div>
+      <div class="ficha-n">● {len(dff)} respuestas completas analizadas</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── KPIs FICHA ────────────────────────────────────────────────────────────────
+    serie_pp1 = dff[c_pp1].dropna() if c_pp1 else pd.Series()
+    serie_pp2 = dff[c_pp2].dropna() if c_pp2 else pd.Series()
+    positivas = serie_pp1.astype(str).str.lower().str.contains("positiv", na=False).sum()
+    negativas = serie_pp1.astype(str).str.lower().str.contains("negativ", na=False).sum()
+    continua  = serie_pp2.astype(str).str.lower().str.contains("contin", na=False).sum()
+    cambia    = serie_pp2.astype(str).str.lower().str.contains("cambi|nueva|rumbo", na=False).sum()
+    pct_pos  = f"{positivas/len(serie_pp1)*100:.1f}%" if len(serie_pp1)>0 else "—"
+    pct_neg  = f"{negativas/len(serie_pp1)*100:.1f}%" if len(serie_pp1)>0 else "—"
+    pct_cont = f"{continua/len(serie_pp2)*100:.1f}%"  if len(serie_pp2)>0 else "—"
+    pct_camb = f"{cambia/len(serie_pp2)*100:.1f}%"    if len(serie_pp2)>0 else "—"
+
+    k1,k2,k3,k4 = st.columns(4)
+    with k1: st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#1a6e35">{pct_pos}</div><div class="kpi-l">Opinión positiva</div></div>',unsafe_allow_html=True)
+    with k2: st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#CE1126">{pct_neg}</div><div class="kpi-l">Opinión negativa</div></div>',unsafe_allow_html=True)
+    with k3: st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#003DA5">{pct_cont}</div><div class="kpi-l">Quiere continuidad</div></div>',unsafe_allow_html=True)
+    with k4: st.markdown(f'<div class="kpi-box"><div class="kpi-n" style="color:#7C3AED">{pct_camb}</div><div class="kpi-l">Quiere cambio</div></div>',unsafe_allow_html=True)
+
+    st.divider()
+
+    # ── PP1 Y PP2 — SIEMPRE ───────────────────────────────────────────────────────
+    st.markdown('<div class="sec">Resultados principales</div>', unsafe_allow_html=True)
+    r1, r2 = st.columns(2)
+    with r1:
+        barras(dff, c_pp1, "PP1 — Opinión de la gestión del alcalde", COLORES_PP1, altura=280)
+    with r2:
+        barras(dff, c_pp2, "PP2 — Continuidad vs cambio", altura=280)
+
+    st.divider()
+
+    # ── PERFIL — SIEMPRE ──────────────────────────────────────────────────────────
+    st.markdown('<div class="sec">Perfil del encuestado</div>', unsafe_allow_html=True)
+    p1,p2,p3 = st.columns(3)
+    with p1: barras(dff, c_pp4, "PP4 — Género")
+    with p2: barras(dff, c_pp3, "PP3 — Rango de edad")
+    with p3: barras(dff, c_pp5, "PP5 — Estrato")
+    p4,p5,_ = st.columns(3)
+    with p4: barras(dff, c_pp6, "PP6 — Nivel educativo")
+    with p5: barras(dff, c_pp7, "PP7 — Situación laboral")
+
+    # ── RANKING Y TABLA — SOLO SIN FILTRO ────────────────────────────────────────
+    if not hay_filtro:
+        st.divider()
+        st.markdown('<div class="sec">Ranking nacional — PP1 Opinión de gestión</div>', unsafe_allow_html=True)
+        if c_pp1 and c_alc and c_pp1 in df.columns and c_alc in df.columns:
+            tmp = df[[c_alc,c_pp1]].dropna()
+            tmp = tmp[tmp[c_pp1].astype(str).str.strip().str.len()>0]
+            def pct_positiva(serie):
+                return serie.astype(str).str.lower().str.contains("positiv",na=False).sum()/len(serie)*100
+            ranking = tmp.groupby(c_alc)[c_pp1].apply(pct_positiva).reset_index()
+            ranking.columns = ["Alcalde","% Positiva"]
+            ranking["% Positiva"] = ranking["% Positiva"].round(1)
+            ranking["n"] = tmp.groupby(c_alc)[c_pp1].count().values
+            ranking = ranking[ranking["n"]>=20]
+            ranking = ranking.sort_values("% Positiva",ascending=False).reset_index(drop=True)
+            ciudad_por_alcalde = df.groupby(c_alc)[c_muni].agg(lambda x: x.value_counts().index[0] if len(x)>0 else "—")
+            top3  = ranking.head(3).copy()
+            peor3 = ranking.tail(3).sort_values("% Positiva",ascending=True).copy()
+            st.caption("⚠️ Ranking basado en % de opinión positiva (PP1). Solo alcaldes con mínimo 20 respuestas.")
+            ra,rb = st.columns(2)
+            with ra:
+                st.markdown("🏆 **Mejor calificados**")
+                for i,row in top3.iterrows():
+                    medal=["🥇","🥈","🥉"][i]
+                    ciudad=ciudad_por_alcalde.get(row["Alcalde"],"—")
+                    st.markdown(f'<div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;padding:10px 14px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:600">{medal} {row["Alcalde"]}</span><span style="font-size:20px;font-weight:700;color:#15803d">{row["% Positiva"]}%</span></div><div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {ciudad} · {int(row["n"])} respuestas</div></div>',unsafe_allow_html=True)
+            with rb:
+                st.markdown("⚠️ **Peor calificados**")
+                for j,(_,row) in enumerate(peor3.iterrows()):
+                    medal=["🔴","🟠","🟡"][j]
+                    ciudad=ciudad_por_alcalde.get(row["Alcalde"],"—")
+                    st.markdown(f'<div style="background:#fff7f7;border-left:4px solid #ef4444;border-radius:6px;padding:10px 14px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:600">{medal} {row["Alcalde"]}</span><span style="font-size:20px;font-weight:700;color:#CE1126">{row["% Positiva"]}%</span></div><div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {ciudad} · {int(row["n"])} respuestas</div></div>',unsafe_allow_html=True)
+        st.divider()
+        st.markdown('<div class="sec">Respuestas por ciudad</div>', unsafe_allow_html=True)
+        if c_muni and c_alc and c_muni in df.columns:
+            resumen = df.groupby(c_muni).size().reset_index(name="Respuestas")
+            resumen.columns = ["Ciudad","Respuestas"]
+            alc_ciudad = df.groupby(c_muni)[c_alc].agg(lambda x: x.value_counts().index[0] if len(x)>0 else "—").reset_index()
+            alc_ciudad.columns = ["Ciudad","Alcalde"]
+            resumen = resumen.merge(alc_ciudad,on="Ciudad").sort_values("Respuestas",ascending=False).reset_index(drop=True)
+            resumen.index = resumen.index+1
+            resumen["% del total"] = (resumen["Respuestas"]/resumen["Respuestas"].sum()*100).round(1).astype(str)+"%"
+            resumen = resumen[["Ciudad","Alcalde","Respuestas","% del total"]]
+            st.dataframe(resumen,use_container_width=True,hide_index=False,height=min(420,40+len(resumen)*36))
+
+    # Botón descarga PDF — solo sin filtros
+    if not hay_filtro and c_pp1 and c_alc:
+        st.divider()
+        if st.button("📄 Generar informe PDF", use_container_width=False):
+            with st.spinner("Generando PDF…"):
+                pdf = generar_pdf(df, c_pp1, c_pp2, c_alc, c_muni)
+            ahora = datetime.now().strftime("%Y%m%d_%H%M")
+            st.download_button(
+                label="⬇ Descargar informe PDF",
+                data=pdf,
+                file_name=f"Informe_Alcaldes_{ahora}.pdf",
+                mime="application/pdf",
+                use_container_width=False,
+            )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PESTAÑA 2 — DATOS DR. LEMOINE (8 ciudades principales)
+# ══════════════════════════════════════════════════════════════════════════════
+with tab2:
+    dfl = filtrar_lemoine(df, c_muni)
+
+    st.markdown('<div class="sec">Informe Dr. Lemoine — 8 ciudades principales</div>', unsafe_allow_html=True)
+
+    if len(dfl) == 0:
+        st.warning("No hay respuestas registradas para las ciudades de este informe.")
+    else:
+        ciudades_presentes = sorted(dfl[c_muni].dropna().astype(str).unique().tolist())
+        st.caption("Ciudades incluidas: " + " · ".join(ciudades_presentes))
+
+        # KPIs
+        sL1 = dfl[c_pp1].dropna().astype(str) if c_pp1 else pd.Series(dtype=str)
+        sL2 = dfl[c_pp2].dropna().astype(str) if c_pp2 else pd.Series(dtype=str)
+        lpos  = sL1.str.lower().str.contains("positiv", na=False).sum()
+        lneg  = sL1.str.lower().str.contains("negativ", na=False).sum()
+        lcont = sL2.str.lower().str.contains("contin", na=False).sum()
+        lcamb = sL2.str.lower().str.contains("cambi|rumbo|nueva", na=False).sum()
+
+        kl1, kl2, kl3, kl4, kl5 = st.columns(5)
+        kl1.metric("Respuestas", len(dfl))
+        kl2.metric("Opinión positiva", f"{lpos/len(sL1)*100:.1f}%" if len(sL1) else "—")
+        kl3.metric("Opinión negativa", f"{lneg/len(sL1)*100:.1f}%" if len(sL1) else "—")
+        kl4.metric("Continuidad",      f"{lcont/len(sL2)*100:.1f}%" if len(sL2) else "—")
+        kl5.metric("Cambio",           f"{lcamb/len(sL2)*100:.1f}%" if len(sL2) else "—")
+
+        st.divider()
+
+        # Ranking de las 8 ciudades
+        st.markdown('<div class="sec">Ranking — ciudades principales</div>', unsafe_allow_html=True)
+
+        if c_pp1 and c_alc:
+            tmpL = dfl[[c_alc, c_pp1]].dropna()
+            tmpL = tmpL[tmpL[c_pp1].astype(str).str.strip().str.len() > 0]
+
+            filas_rk = []
+            for a in tmpL[c_alc].unique():
+                sub = tmpL[tmpL[c_alc] == a][c_pp1].astype(str).str.lower()
+                nn  = len(sub)
+                if nn == 0:
+                    continue
+                pp = round(sub.str.contains("positiv", na=False).sum() / nn * 100, 1)
+                pn = round(sub.str.contains("negativ", na=False).sum() / nn * 100, 1)
+                subc = dfl[dfl[c_alc] == a][c_pp2].dropna().astype(str).str.lower() if c_pp2 else pd.Series(dtype=str)
+                pc = round(subc.str.contains("contin", na=False).sum() / len(subc) * 100, 1) if len(subc) else 0.0
+                ciu = dfl[dfl[c_alc] == a][c_muni].mode()
+                filas_rk.append({
+                    "Alcalde": a,
+                    "Ciudad": ciu.iloc[0] if len(ciu) else "—",
+                    "n": nn,
+                    "% Positiva": pp,
+                    "% Negativa": pn,
+                    "Continuidad": pc,
+                    "Neto": round(pp - pn, 1),
+                })
+
+            rkL = pd.DataFrame(filas_rk).sort_values("% Positiva", ascending=False).reset_index(drop=True)
+            rkL.index = rkL.index + 1
+
+            if len(rkL) > 0:
+                cL1, cL2 = st.columns(2)
+                with cL1:
+                    st.markdown("🏆 **Mejor evaluados**")
+                    for i, row in rkL.head(3).iterrows():
+                        medal = ["🥇","🥈","🥉"][i-1] if i <= 3 else "•"
+                        st.markdown(
+                            f'<div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;'
+                            f'padding:10px 14px;margin-bottom:8px">'
+                            f'<div style="display:flex;justify-content:space-between;align-items:center">'
+                            f'<span style="font-size:13px;font-weight:600">{medal} {row["Alcalde"]}</span>'
+                            f'<span style="font-size:20px;font-weight:700;color:#15803d">{row["% Positiva"]}%</span></div>'
+                            f'<div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {row["Ciudad"]} · {int(row["n"])} respuestas</div>'
+                            f'</div>', unsafe_allow_html=True)
+                with cL2:
+                    st.markdown("⚠️ **Peor evaluados**")
+                    peorL = rkL.tail(3).sort_values("% Positiva", ascending=True)
+                    for j, (_, row) in enumerate(peorL.iterrows()):
+                        medal = ["🔴","🟠","🟡"][j] if j < 3 else "•"
+                        st.markdown(
+                            f'<div style="background:#fff7f7;border-left:4px solid #ef4444;border-radius:6px;'
+                            f'padding:10px 14px;margin-bottom:8px">'
+                            f'<div style="display:flex;justify-content:space-between;align-items:center">'
+                            f'<span style="font-size:13px;font-weight:600">{medal} {row["Alcalde"]}</span>'
+                            f'<span style="font-size:20px;font-weight:700;color:#CE1126">{row["% Positiva"]}%</span></div>'
+                            f'<div style="font-size:11px;color:#6b7280;margin-top:3px">📍 {row["Ciudad"]} · {int(row["n"])} respuestas</div>'
+                            f'</div>', unsafe_allow_html=True)
+
+                st.divider()
+                st.markdown('<div class="sec">Tabla comparativa</div>', unsafe_allow_html=True)
+                tabla_vis = rkL[["Ciudad","Alcalde","n","% Positiva","% Negativa","Neto","Continuidad"]].copy()
+                st.dataframe(tabla_vis, use_container_width=True,
+                             height=min(420, 45 + len(tabla_vis)*36))
+
+                st.divider()
+                st.markdown('<div class="sec">Resultados por pregunta</div>', unsafe_allow_html=True)
+                bl1, bl2 = st.columns(2)
+                with bl1:
+                    barras(dfl, c_pp1, "PP1 — Opinión de la gestión", COLORES_PP1, altura=280)
+                with bl2:
+                    barras(dfl, c_pp2, "PP2 — Continuidad vs cambio", altura=280)
+
+                st.divider()
+                st.markdown('<div class="sec">Perfil del encuestado</div>', unsafe_allow_html=True)
+                pl1, pl2, pl3 = st.columns(3)
+                with pl1: barras(dfl, c_pp4, "PP4 — Género")
+                with pl2: barras(dfl, c_pp3, "PP3 — Rango de edad")
+                with pl3: barras(dfl, c_pp5, "PP5 — Estrato")
+                pl4, pl5, _ = st.columns(3)
+                with pl4: barras(dfl, c_pp6, "PP6 — Nivel educativo")
+                with pl5: barras(dfl, c_pp7, "PP7 — Situación laboral")
+
+                st.divider()
+                if st.button("📄 Generar informe PDF — Dr. Lemoine"):
+                    with st.spinner("Generando PDF…"):
+                        pdfL = generar_pdf(dfl, c_pp1, c_pp2, c_alc, c_muni,
+                                           titulo="Percepción de gestión de alcaldes",
+                                           subtitulo_extra="Informe Dr. Lemoine · 8 ciudades principales",
+                                           min_n=1)
+                    st.download_button(
+                        label="⬇ Descargar informe Dr. Lemoine",
+                        data=pdfL,
+                        file_name=f"Informe_Lemoine_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                        mime="application/pdf",
+                    )
 
 # ── AUTO-REFRESCO ──────────────────────────────────────────────────────────────
 time.sleep(INTERVALO)
