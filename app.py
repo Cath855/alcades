@@ -712,7 +712,39 @@ with tab2:
         st.warning("No hay respuestas registradas para las ciudades de este informe.")
     else:
         ciudades_presentes = sorted(dfl[c_muni].dropna().astype(str).unique().tolist())
-        st.caption("Ciudades incluidas: " + " · ".join(ciudades_presentes))
+
+        # ── FILTROS DE LA PESTAÑA ─────────────────────────────────────────────
+        fl1, fl2, fl3 = st.columns([2, 2, 1])
+        with fl1:
+            f_ciudad_L = st.selectbox("Ciudad", ["Todas"] + ciudades_presentes, key="lem_ciudad")
+
+        dfl_ciudad = dfl[dfl[c_muni].astype(str) == f_ciudad_L] if f_ciudad_L != "Todas" else dfl
+        alcs_L = sorted(dfl_ciudad[c_alc].dropna().astype(str).unique().tolist()) if c_alc else []
+        with fl2:
+            opciones_alc_L = ["Todos"] + alcs_L
+            idx_L = 1 if len(opciones_alc_L) == 2 else 0
+            f_alc_L = st.selectbox("Alcalde", opciones_alc_L, index=idx_L, key="lem_alcalde")
+        with fl3:
+            st.markdown("<br/>", unsafe_allow_html=True)
+            if st.button("↺ Limpiar filtros", use_container_width=True, key="lem_limpiar"):
+                st.session_state["lem_ciudad"] = "Todas"
+                st.session_state["lem_alcalde"] = "Todos"
+                st.rerun()
+
+        # Aplicar filtros de la pestaña
+        dfl_full = dfl.copy()          # las 8 ciudades sin filtrar (para el ranking)
+        if f_ciudad_L != "Todas":
+            dfl = dfl[dfl[c_muni].astype(str) == f_ciudad_L]
+        if f_alc_L != "Todos" and c_alc:
+            dfl = dfl[dfl[c_alc].astype(str) == f_alc_L]
+
+        hay_filtro_L = f_ciudad_L != "Todas" or f_alc_L != "Todos"
+
+        if hay_filtro_L:
+            st.caption(f"Mostrando **{len(dfl)}** de **{len(dfl_full)}** respuestas · "
+                       f"{f_ciudad_L if f_ciudad_L != 'Todas' else 'todas las ciudades'}")
+        else:
+            st.caption("Ciudades incluidas: " + " · ".join(ciudades_presentes))
 
         # KPIs
         sL1 = dfl[c_pp1].dropna().astype(str) if c_pp1 else pd.Series(dtype=str)
@@ -731,11 +763,13 @@ with tab2:
 
         st.divider()
 
-        # Ranking de las 8 ciudades
-        st.markdown('<div class="sec">Ranking — ciudades principales</div>', unsafe_allow_html=True)
+        # Ranking de las 8 ciudades — solo sin filtro, sobre el conjunto completo
+        if not hay_filtro_L:
+            st.markdown('<div class="sec">Ranking — ciudades principales</div>', unsafe_allow_html=True)
 
-        if c_pp1 and c_alc:
-            tmpL = dfl[[c_alc, c_pp1]].dropna()
+        if not hay_filtro_L and c_pp1 and c_alc:
+            base_rk = dfl_full
+            tmpL = base_rk[[c_alc, c_pp1]].dropna()
             tmpL = tmpL[tmpL[c_pp1].astype(str).str.strip().str.len() > 0]
 
             filas_rk = []
@@ -746,9 +780,9 @@ with tab2:
                     continue
                 pp = round(sub.str.contains("positiv", na=False).sum() / nn * 100, 1)
                 pn = round(sub.str.contains("negativ", na=False).sum() / nn * 100, 1)
-                subc = dfl[dfl[c_alc] == a][c_pp2].dropna().astype(str).str.lower() if c_pp2 else pd.Series(dtype=str)
+                subc = base_rk[base_rk[c_alc] == a][c_pp2].dropna().astype(str).str.lower() if c_pp2 else pd.Series(dtype=str)
                 pc = round(subc.str.contains("contin", na=False).sum() / len(subc) * 100, 1) if len(subc) else 0.0
-                ciu = dfl[dfl[c_alc] == a][c_muni].mode()
+                ciu = base_rk[base_rk[c_alc] == a][c_muni].mode()
                 filas_rk.append({
                     "Alcalde": a,
                     "Ciudad": ciu.iloc[0] if len(ciu) else "—",
@@ -796,37 +830,46 @@ with tab2:
                 st.dataframe(tabla_vis, use_container_width=True,
                              height=min(420, 45 + len(tabla_vis)*36))
 
-                st.divider()
-                st.markdown('<div class="sec">Resultados por pregunta</div>', unsafe_allow_html=True)
-                bl1, bl2 = st.columns(2)
-                with bl1:
-                    barras(dfl, c_pp1, "PP1 — Opinión de la gestión", COLORES_PP1, altura=280)
-                with bl2:
-                    barras(dfl, c_pp2, "PP2 — Continuidad vs cambio", altura=280)
+        # ── SIEMPRE VISIBLE (con o sin filtro) ────────────────────────────────
+        st.divider()
+        st.markdown('<div class="sec">Resultados por pregunta</div>', unsafe_allow_html=True)
+        bl1, bl2 = st.columns(2)
+        with bl1:
+            barras(dfl, c_pp1, "PP1 — Opinión de la gestión", COLORES_PP1, altura=280)
+        with bl2:
+            barras(dfl, c_pp2, "PP2 — Continuidad vs cambio", altura=280)
 
-                st.divider()
-                st.markdown('<div class="sec">Perfil del encuestado</div>', unsafe_allow_html=True)
-                pl1, pl2, pl3 = st.columns(3)
-                with pl1: barras(dfl, c_pp4, "PP4 — Género")
-                with pl2: barras(dfl, c_pp3, "PP3 — Rango de edad")
-                with pl3: barras(dfl, c_pp5, "PP5 — Estrato")
-                pl4, pl5, _ = st.columns(3)
-                with pl4: barras(dfl, c_pp6, "PP6 — Nivel educativo")
-                with pl5: barras(dfl, c_pp7, "PP7 — Situación laboral")
+        st.divider()
+        st.markdown('<div class="sec">Perfil del encuestado</div>', unsafe_allow_html=True)
+        pl1, pl2, pl3 = st.columns(3)
+        with pl1: barras(dfl, c_pp4, "PP4 — Género")
+        with pl2: barras(dfl, c_pp3, "PP3 — Rango de edad")
+        with pl3: barras(dfl, c_pp5, "PP5 — Estrato")
+        pl4, pl5, _ = st.columns(3)
+        with pl4: barras(dfl, c_pp6, "PP6 — Nivel educativo")
+        with pl5: barras(dfl, c_pp7, "PP7 — Situación laboral")
 
-                st.divider()
-                if st.button("📄 Generar informe PDF — Dr. Lemoine"):
-                    with st.spinner("Generando PDF…"):
-                        pdfL = generar_pdf(dfl, c_pp1, c_pp2, c_alc, c_muni,
-                                           titulo="Percepción de gestión de alcaldes",
-                                           subtitulo_extra="Informe Dr. Lemoine · 8 ciudades principales",
-                                           min_n=1)
-                    st.download_button(
-                        label="⬇ Descargar informe Dr. Lemoine",
-                        data=pdfL,
-                        file_name=f"Informe_Lemoine_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                        mime="application/pdf",
-                    )
+        # ── PDF: siempre disponible, refleja el filtro activo ─────────────────
+        st.divider()
+        if st.button("📄 Generar informe PDF — Dr. Lemoine", key="lem_pdf"):
+            if hay_filtro_L:
+                sub_txt = f"Informe Dr. Lemoine · {f_ciudad_L if f_ciudad_L != 'Todas' else 'ciudades principales'}"
+                df_pdf  = dfl
+            else:
+                sub_txt = "Informe Dr. Lemoine · 8 ciudades principales"
+                df_pdf  = dfl_full
+            with st.spinner("Generando PDF…"):
+                pdfL = generar_pdf(df_pdf, c_pp1, c_pp2, c_alc, c_muni,
+                                   titulo="Percepción de gestión de alcaldes",
+                                   subtitulo_extra=sub_txt,
+                                   min_n=1)
+            st.download_button(
+                label="⬇ Descargar informe Dr. Lemoine",
+                data=pdfL,
+                file_name=f"Informe_Lemoine_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                mime="application/pdf",
+                key="lem_dl",
+            )
 
 # ── AUTO-REFRESCO ──────────────────────────────────────────────────────────────
 time.sleep(INTERVALO)
